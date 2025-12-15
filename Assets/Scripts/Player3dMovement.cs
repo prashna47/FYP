@@ -3,6 +3,7 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterController))]
 public class Player3DMovement : MonoBehaviour
 {
+
     public float moveSpeed = 5f;
     public float gravity = -20f;          // Stronger than -9.81 to feel snappy
     private float _verticalVelocity;      // Our Y speed
@@ -31,6 +32,9 @@ public class Player3DMovement : MonoBehaviour
 
     void Update()
     {
+        if (PlayerControlLock.MovementLocked)
+            return;
+
         // --- INPUT ---
         float inputX = Input.GetAxisRaw("Horizontal");
         float inputZ = Input.GetAxisRaw("Vertical");

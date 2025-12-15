@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 
 public class PlayerItemHandler : MonoBehaviour
@@ -32,8 +32,21 @@ public class PlayerItemHandler : MonoBehaviour
         }
     }
 
-    private void Update()
+    void Update()
     {
+        // Cleanup INVALID currentItem references (okay to clear this)
+        if (currentItem == null || !currentItem || !currentItem.activeInHierarchy)
+        {
+            nearItem = false;
+            currentItem = null;
+        }
+
+        // ✅ DO NOT clear carriedItem just because it's inactive (we set it inactive while carrying)
+        if (carriedItem != null && !carriedItem)
+        {
+            carriedItem = null;
+        }
+
         // PICK UP
         if (nearItem && carriedItem == null && Input.GetKeyDown(pickupKey))
         {
@@ -45,7 +58,10 @@ public class PlayerItemHandler : MonoBehaviour
         {
             DropItem();
         }
+
+        UpdateUI();
     }
+
 
     private void OnTriggerEnter(Collider other)
     {
@@ -71,15 +87,18 @@ public class PlayerItemHandler : MonoBehaviour
     {
         carriedItem = currentItem;
 
-        // Hide / move item
         if (carriedItem != null)
         {
             carriedItem.SetActive(false);
             Debug.Log("Picked up: " + carriedItem.name);
         }
 
+        nearItem = false;
+        currentItem = null;
+
         UpdateUI();
     }
+
 
     private void DropItem()
     {
@@ -131,6 +150,14 @@ public class PlayerItemHandler : MonoBehaviour
         nearItem = true;
         PickUpItem();
     }
+
+    public void ClearNearbyItem()
+    {
+        nearItem = false;
+        currentItem = null;
+        UpdateUI();
+    }
+
 
     public void Drop(Vector3 dropPosition)
     {

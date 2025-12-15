@@ -30,6 +30,16 @@ public class PlayerProximityInteractor : MonoBehaviour
     {
         if (BookUI.IsOpen) { SetPrompt(null); return; }
 
+        for (int i = inRange.Count - 1; i >= 0; i--)
+        {
+            var comp = inRange[i] as Component;
+            if (comp == null || !comp)
+            {
+                if (current == inRange[i]) current = null;
+                inRange.RemoveAt(i);
+            }
+        }
+
         // pick nearest
         IInteractable nearest = null;
         float nearestDist = float.MaxValue;
@@ -54,8 +64,8 @@ public class PlayerProximityInteractor : MonoBehaviour
         current = nearest;
         SetPrompt(current);
 
-        if (current != null && Input.GetKeyDown(KeyCode.E))
-        {
+         if (current != null && Input.GetKeyDown(KeyCode.E) && !InteractionLock.NpcInRange)
+            {
             current.Interact(this);
         }
     }
@@ -100,4 +110,20 @@ public class PlayerProximityInteractor : MonoBehaviour
         inRange.Remove(interactable);
         if (current == interactable) current = null;
     }
+    public void ClearAllInteractables()
+    {
+        inRange.Clear();
+        current = null;
+
+        // Hide the E prompt immediately
+        if (promptGroup)
+        {
+            promptGroup.alpha = 0f;
+            promptGroup.blocksRaycasts = false;
+        }
+
+        if (promptText)
+            promptText.text = "";
+    }
+
 }
