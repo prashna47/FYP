@@ -8,6 +8,8 @@ TagManager:
   - Door
   - TeleportPoint
   - DoorLocked
+  - Fire
+  - Key
   layers:
   - Default
   - TransparentFX

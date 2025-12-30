@@ -20,7 +20,7 @@ public class PlayerItemHandler : MonoBehaviour
 
     private bool nearItem = false;
     private GameObject currentItem;        // The item we are near
-    private GameObject carriedItem;        // The item currently held (if any)
+    public GameObject carriedItem;        // The item currently held (if any)
 
     public bool IsHoldingItem => carriedItem != null;
 
@@ -73,7 +73,7 @@ public class PlayerItemHandler : MonoBehaviour
         }
     }
 
-    private void OnTriggerExit(Collider other)
+    public void OnTriggerExit(Collider other)
     {
         if (other.CompareTag("PickupItem"))
         {
@@ -83,7 +83,7 @@ public class PlayerItemHandler : MonoBehaviour
         }
     }
 
-    private void PickUpItem()
+    public void PickUpItem()
     {
         carriedItem = currentItem;
 
@@ -100,7 +100,7 @@ public class PlayerItemHandler : MonoBehaviour
     }
 
 
-    private void DropItem()
+    public void DropItem()
     {
         if (carriedItem == null) return;
 
