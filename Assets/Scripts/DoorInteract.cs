@@ -1,11 +1,15 @@
 ﻿using System.Collections;
 using UnityEngine;
 
+
 [RequireComponent(typeof(Collider))]
 public class DoorInteractable : MonoBehaviour, IInteractable
 {
     [Header("Teleport")]
     public Transform teleportPoint; // assign in Inspector (child TeleportPoint)
+
+    public bool IsOpen { get; private set; }
+
 
     [Header("Prompt")]
     public string prompt = "Press [E] to interact";  // Default prompt for unlocked door
@@ -93,6 +97,8 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
     IEnumerator TeleportWithFade(PlayerProximityInteractor interactor, Transform target)
     {
+        IsOpen = true;
+
         // Start fading out the screen to black
         if (fader != null)
             yield return fader.FadeOut();

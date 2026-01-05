@@ -1,10 +1,15 @@
 ﻿using UnityEngine;
 using TMPro;
+using System;
+
 
 public class PlayerItemHandler : MonoBehaviour
 {
     [Header("UI")]
     public TMP_Text interactText;          // Shared UI text
+
+    public static event Action<GameObject> OnItemPickedUp;
+
 
     [Header("Prompts")]
     [Tooltip("Text shown when you can pick up an item.")]
@@ -91,6 +96,15 @@ public class PlayerItemHandler : MonoBehaviour
         {
             carriedItem.SetActive(false);
             Debug.Log("Picked up: " + carriedItem.name);
+
+            if (carriedItem.TryGetComponent<KeyItem>(out _))
+            {
+                GameState.HasKey = true;
+            }
+
+
+            // 🔔 NEW: notify listeners
+            OnItemPickedUp?.Invoke(carriedItem);
         }
 
         nearItem = false;
@@ -98,6 +112,7 @@ public class PlayerItemHandler : MonoBehaviour
 
         UpdateUI();
     }
+
 
 
     public void DropItem()
