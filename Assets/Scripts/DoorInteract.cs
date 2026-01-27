@@ -10,6 +10,8 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
     public bool IsOpen { get; private set; }
 
+    
+
 
     [Header("Prompt")]
     public string prompt = "Press [E] to interact";  // Default prompt for unlocked door
@@ -21,6 +23,7 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
     [Header("Fade")]
     public ScreenFader fader; // assign in Inspector (same ScreenFader used everywhere)
+    public float blackScreenHoldTime = 0.5f;
 
     private bool isUnlocked = false;
 
@@ -99,40 +102,41 @@ public class DoorInteractable : MonoBehaviour, IInteractable
     {
         IsOpen = true;
 
-        // Start fading out the screen to black
+        // Fade to black
         if (fader != null)
             yield return fader.FadeOut();
 
-        // Clear stuck interactables & pickup proximity (teleport skips trigger exits)
-        interactor.ClearAllInteractables();
+        // 🔒 Stay black for 1 second no matter what
+        yield return new WaitForSeconds(blackScreenHoldTime);
 
+
+        // Clear stuck interactables
+        interactor.ClearAllInteractables();
         var itemHandler = interactor.GetComponent<PlayerItemHandler>();
         if (itemHandler != null) itemHandler.ClearNearbyItem();
 
         Transform player = interactor.transform;
-
         CharacterController cc = player.GetComponent<CharacterController>();
-        if (cc != null)
-            cc.enabled = false;  // Disable the character controller to prevent movement during teleportation
-
-        player.position = target.position; // Move the player to the target position
 
         if (cc != null)
-            cc.enabled = true;  // Re-enable the character controller after the teleportation
+            cc.enabled = false;
 
-        // Now wait a short moment to let the teleportation complete
-        const float epsilon = 0.02f;
-        float timeout = 1.0f;
-        float t = 0f;
+        // Teleport player
+        player.position = target.position;
+
+        // Snap camera (important because you use smooth follow)
+        camera cam = FindObjectOfType<camera>();
+        if (cam != null)
+            cam.SnapToTarget();
+
+        // Let transforms & camera update
         yield return null;
+        yield return new WaitForEndOfFrame();
 
-        while (Vector3.Distance(player.position, target.position) > epsilon && t < timeout)
-        {
-            t += Time.deltaTime;
-            yield return null;
-        }
+        if (cc != null)
+            cc.enabled = true;
 
-        // Once the player is at the target position, fade the screen back in
+        // Fade back in
         if (fader != null)
             yield return fader.FadeIn();
     }

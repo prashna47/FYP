@@ -8,6 +8,9 @@ public class ScreenFader : MonoBehaviour
     public float fadeOutTime = 0.4f;
     public float fadeInTime = 0.2f;
 
+   
+
+
     void Awake()
     {
         if (!fadeImage) return;

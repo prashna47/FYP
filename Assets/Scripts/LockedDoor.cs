@@ -1,4 +1,4 @@
-/*using System.Collections;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 
@@ -74,4 +74,3 @@ public class DoorProximityMessage : MonoBehaviour
         promptGroup.alpha = to;
     }
 }
-*/
