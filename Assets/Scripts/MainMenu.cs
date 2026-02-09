@@ -5,7 +5,7 @@ public class MainMenu : MonoBehaviour
 {
     public void PlayGame()
     {
-        SceneManager.LoadScene("SampleScene"); // name of scenee
+        SceneManager.LoadScene("CharacterSelection"); // name of scenee
     }
 
     public void QuitGame()
