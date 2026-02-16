@@ -5,7 +5,17 @@ public class MainMenu : MonoBehaviour
 {
     public void PlayGame()
     {
-        SceneManager.LoadScene("CharacterSelection"); // name of scenee
+        ScreenFade fader = FindObjectOfType<ScreenFade>();
+
+        if (fader != null)
+        {
+            fader.FadeToScene("CharacterSelection");
+        }
+        else
+        {
+            // Fallback in case no fader exists
+            SceneManager.LoadScene("CharacterSelection");
+        }
     }
 
     public void QuitGame()

@@ -22,7 +22,7 @@ public class DoorInteractable : MonoBehaviour, IInteractable
     public bool isLocked = true;  // By default, doors are locked. You can set this in the Inspector.
 
     [Header("Fade")]
-    public ScreenFader fader; // assign in Inspector (same ScreenFader used everywhere)
+    public ScreenFade fader; // assign in Inspector (same ScreenFader used everywhere)
     public float blackScreenHoldTime = 0.5f;
 
     private bool isUnlocked = false;

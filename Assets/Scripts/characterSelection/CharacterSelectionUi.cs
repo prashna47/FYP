@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using System.Collections;
 
 public class CharacterSelectionUI : MonoBehaviour
 {
@@ -83,6 +84,22 @@ public class CharacterSelectionUI : MonoBehaviour
     public void ConfirmSelection()
     {
         GameData.IsMale = selectedIndex == 0;
-        SceneManager.LoadScene("SampleScene");
+        StartCoroutine(Transition());
+    }
+
+    IEnumerator Transition()
+    {
+        ScreenFade fader = FindObjectOfType<ScreenFade>();
+
+        if (fader != null)
+        {
+            yield return fader.FadeOut();
+            SceneManager.LoadScene("SampleScene");
+        }
+        else
+        {
+            // Fallback if no fader exists
+            SceneManager.LoadScene("SampleScene");
+        }
     }
 }
