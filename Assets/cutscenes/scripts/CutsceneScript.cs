@@ -3,8 +3,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-#region DATA
-
 [System.Serializable]
 public class Drawing
 {
@@ -19,23 +17,23 @@ public class TextScreen
 {
     [TextArea(2, 6)]
     public string text;
-
     public float startDelay = 0f;
     public float fadeInTime = 0.5f;
     public float stayTime = 2f;
     public float fadeOutTime = 0.5f;
 }
 
-#endregion
-
 public class CutsceneScript : MonoBehaviour
 {
+    [Header("AUTO")]
+    public bool playOnSceneLoad = false;
+    public CutsceneScript nextCutscene; // optional chain
+
     [Header("UI")]
+    public GameObject cutsceneCanvas;
     public Image fadeOverlay;
     public Image cutsceneImage;
     public TextMeshProUGUI cutsceneText;
-    public GameObject cutsceneCanvas;
-
 
     [Header("Data")]
     public Drawing[] drawings;
@@ -45,25 +43,22 @@ public class CutsceneScript : MonoBehaviour
     public float blackHoldTime = 1f;
     public float blackFadeOutTime = 1f;
     public float imageFadeInTime = 0.3f;
-
-    [Header("Exit Fade")]
     public float imageFadeOutTime = 1.5f;
 
     [Header("Motion")]
     public float jitterAmount = 2f;
 
-    public AreaMusicTrigger areaMusic;
-
-
     Vector2 originalPos;
-
     Coroutine textRoutine;
     bool allowFlicker = true;
 
-    void Awake()
+    void Start()
     {
         originalPos = cutsceneImage.rectTransform.anchoredPosition;
-        enabled = false; // wait for trigger
+
+        // Play automatically only if enabled
+        if (playOnSceneLoad)
+            Play();
     }
 
     public void Play()
@@ -74,77 +69,76 @@ public class CutsceneScript : MonoBehaviour
             return;
         }
 
-        cutsceneCanvas.SetActive(true);
+        
+            // Activate the cutscene GameObject (in case it was inactive)
+            gameObject.SetActive(true);
 
-        // 🔊 START MUSIC DELAY AT CUTSCENE START
-        if (areaMusic != null)
-            areaMusic.StartMusicWithDelay();
+            // Activate canvas
+            cutsceneCanvas.SetActive(true);
+            fadeOverlay.gameObject.SetActive(true);
+            cutsceneImage.gameObject.SetActive(true);
+            cutsceneText.gameObject.SetActive(true);
 
-        StartCoroutine(RunCutscene());
+            // Reset everything
+            SetAlpha(fadeOverlay, 1f);
+            SetAlpha(cutsceneImage, 0f);
+            SetTextAlpha(0f);
+            cutsceneImage.rectTransform.anchoredPosition = originalPos;
+            allowFlicker = true;
+
+            StartCoroutine(RunCutscene());
+        
     }
-
-
-
-
 
     IEnumerator RunCutscene()
     {
+        // Freeze game (player, objectives, etc.)
         Time.timeScale = 0f;
-
-        // BLACK SCREEN
-        fadeOverlay.gameObject.SetActive(true);
-        SetAlpha(fadeOverlay, 1f);
-
-        SetAlpha(cutsceneImage, 0f);
-        SetTextAlpha(0f);
 
         yield return new WaitForSecondsRealtime(blackHoldTime);
 
-        // START DRAWINGS ONCE
-        Coroutine drawingsRoutine = StartCoroutine(PlayAllDrawings());
+        Coroutine drawingsRoutine = null;
+        if (drawings.Length > 0)
+            drawingsRoutine = StartCoroutine(PlayAllDrawings());
 
-        // START TEXT
         if (textScreens.Length > 0)
             textRoutine = StartCoroutine(PlayTextTimeline());
 
-        // Fade image in (behind black)
         yield return FadeImageIn();
-
-        // Reveal cutscene
         yield return FadeBlackOut();
 
-        // Wait for drawings to finish
-        yield return drawingsRoutine;
+        if (drawingsRoutine != null)
+            yield return drawingsRoutine;
 
-        // Stop text so it cannot reappear
         if (textRoutine != null)
             StopCoroutine(textRoutine);
 
         SetTextAlpha(0f);
 
-        // Resume gameplay underneath
-        Time.timeScale = 1f;
+        if (drawings.Length > 0)
+        {
+            Drawing lastDrawing = drawings[drawings.Length - 1];
+            Coroutine flickerRoutine = StartCoroutine(FlickerLastDrawing(lastDrawing));
 
-        // Keep flickering the LAST drawing during fade
-        Drawing lastDrawing = drawings[drawings.Length - 1];
-        Coroutine flickerRoutine = StartCoroutine(FlickerLastDrawing(lastDrawing));
+            yield return FadeImageOut();
 
-        // Fade final frame into gameplay (slow → fast)
-        yield return FadeImageOut();
+            allowFlicker = false;
+            StopCoroutine(flickerRoutine);
+        }
 
-        // Stop flicker
-        allowFlicker = false;
-        StopCoroutine(flickerRoutine);
-
-        // Cleanup
+        fadeOverlay.gameObject.SetActive(false);
         cutsceneImage.gameObject.SetActive(false);
         cutsceneText.gameObject.SetActive(false);
-        fadeOverlay.gameObject.SetActive(false);
 
-        enabled = false;
+        cutsceneCanvas.SetActive(false);
+
+        // Resume game AFTER all cutscene visuals
+        Time.timeScale = 1f;
+
+        // Play next cutscene if chained
+        if (nextCutscene != null)
+            nextCutscene.Play();
     }
-
-    #region DRAWINGS
 
     IEnumerator PlayAllDrawings()
     {
@@ -189,10 +183,6 @@ public class CutsceneScript : MonoBehaviour
         cutsceneImage.rectTransform.anchoredPosition = originalPos;
     }
 
-    #endregion
-
-    #region TEXT
-
     IEnumerator PlayTextTimeline()
     {
         foreach (var t in textScreens)
@@ -224,10 +214,6 @@ public class CutsceneScript : MonoBehaviour
         SetTextAlpha(0f);
     }
 
-    #endregion
-
-    #region FADES
-
     IEnumerator FadeImageIn()
     {
         float t = 0f;
@@ -237,35 +223,26 @@ public class CutsceneScript : MonoBehaviour
             SetAlpha(cutsceneImage, t / imageFadeInTime);
             yield return null;
         }
-
         SetAlpha(cutsceneImage, 1f);
     }
 
     IEnumerator FadeImageOut()
     {
-        float startAlpha = cutsceneImage.color.a;
         float t = 0f;
-
         while (t < imageFadeOutTime)
         {
             t += Time.unscaledDeltaTime;
-            float n = Mathf.Clamp01(t / imageFadeOutTime);
-
-            // Slow at first, fast at end
-            float eased = Mathf.SmoothStep(0f, 1f, n);
-
-            float a = Mathf.Lerp(startAlpha, 0f, eased);
-            SetAlpha(cutsceneImage, a);
-
+            float eased = Mathf.SmoothStep(0f, 1f, t / imageFadeOutTime);
+            SetAlpha(cutsceneImage, 1f - eased);
             yield return null;
         }
-
         SetAlpha(cutsceneImage, 0f);
     }
 
     IEnumerator FadeBlackOut()
     {
         float t = 0f;
+
         while (t < blackFadeOutTime)
         {
             t += Time.unscaledDeltaTime;
@@ -276,10 +253,6 @@ public class CutsceneScript : MonoBehaviour
         SetAlpha(fadeOverlay, 0f);
         fadeOverlay.gameObject.SetActive(false);
     }
-
-    #endregion
-
-    #region HELPERS
 
     void SetAlpha(Image img, float a)
     {
@@ -294,6 +267,4 @@ public class CutsceneScript : MonoBehaviour
         c.a = a;
         cutsceneText.color = c;
     }
-
-    #endregion
 }
