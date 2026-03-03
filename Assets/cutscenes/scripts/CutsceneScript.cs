@@ -29,15 +29,27 @@ public class CutsceneScript : MonoBehaviour
     public bool playOnSceneLoad = false;
     public CutsceneScript nextCutscene; // optional chain
 
+   
+
     [Header("UI")]
     public GameObject cutsceneCanvas;
     public Image fadeOverlay;
     public Image cutsceneImage;
     public TextMeshProUGUI cutsceneText;
 
+    [Header("Post Cutscene Image (Optional)")]
+    public Image postCutsceneImage;
+    public float postFadeInTime = 1f;
+    public float postStayTime = 2f;
+    public float postFadeOutTime = 1f;
+
     [Header("Data")]
     public Drawing[] drawings;
     public TextScreen[] textScreens;
+
+    [Header("Quest UI Canvas Fade")]
+    public CanvasGroup questCanvasGroup;
+    public float questFadeTime = 1f;
 
     [Header("Timing")]
     public float blackHoldTime = 1f;
@@ -60,7 +72,16 @@ public class CutsceneScript : MonoBehaviour
         if (playOnSceneLoad)
             Play();
     }
-
+    void Awake()
+    {
+        if (questCanvasGroup != null)
+        {
+            questCanvasGroup.alpha = 0f;          // start fully transparent
+            questCanvasGroup.interactable = false;
+            questCanvasGroup.blocksRaycasts = false;
+            questCanvasGroup.gameObject.SetActive(false); // completely disabled
+        }
+    }
     public void Play()
     {
         if (cutsceneCanvas == null)
@@ -90,8 +111,58 @@ public class CutsceneScript : MonoBehaviour
         
     }
 
+    IEnumerator PlayPostCutsceneImage()
+    {
+        if (postCutsceneImage != null)
+        {
+            postCutsceneImage.gameObject.SetActive(true);
+
+            // Fade In
+            float t = 0f;
+            while (t < postFadeInTime)
+            {
+                t += Time.unscaledDeltaTime;
+                SetAlpha(postCutsceneImage, t / postFadeInTime);
+                yield return null;
+            }
+            SetAlpha(postCutsceneImage, 1f);
+
+            // Stay
+            yield return new WaitForSecondsRealtime(postStayTime);
+
+            // Fade Out
+            t = 0f;
+            while (t < postFadeOutTime)
+            {
+                t += Time.unscaledDeltaTime;
+                SetAlpha(postCutsceneImage, 1f - (t / postFadeOutTime));
+                yield return null;
+            }
+            SetAlpha(postCutsceneImage, 0f);
+            postCutsceneImage.gameObject.SetActive(false);
+        }
+
+
+
+        // Fade in the Quest UI AFTER post image fades out
+        if (questCanvasGroup != null)
+        {
+            questCanvasGroup.gameObject.SetActive(true);
+            questCanvasGroup.interactable = true;
+            questCanvasGroup.blocksRaycasts = true;
+
+            yield return StartCoroutine(FadeQuestCanvas(1f));
+            questCanvasGroup.alpha = 1f;   // FORCE full alpha
+        }
+
+        // ✅ NOW start first objective AFTER fade
+        QuestManager.Instance.StartKeyObjective();
+    }
+
     IEnumerator RunCutscene()
     {
+
+
         // Freeze game (player, objectives, etc.)
         Time.timeScale = 0f;
 
@@ -132,14 +203,28 @@ public class CutsceneScript : MonoBehaviour
 
         cutsceneCanvas.SetActive(false);
 
-        // Resume game AFTER all cutscene visuals
         Time.timeScale = 1f;
+        yield return PlayPostCutsceneImage();
 
         // Play next cutscene if chained
         if (nextCutscene != null)
             nextCutscene.Play();
     }
 
+    IEnumerator FadeQuestCanvas(float target)
+    {
+        float start = questCanvasGroup.alpha;
+        float t = 0f;
+
+        while (t < questFadeTime)
+        {
+            t += Time.unscaledDeltaTime;  // important, works even if game is paused
+            questCanvasGroup.alpha = Mathf.Lerp(start, target, t / questFadeTime);
+            yield return null;
+        }
+
+        questCanvasGroup.alpha = target;
+    }
     IEnumerator PlayAllDrawings()
     {
         foreach (var d in drawings)

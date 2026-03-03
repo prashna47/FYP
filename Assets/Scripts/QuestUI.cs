@@ -22,7 +22,12 @@ public class QuestUI : MonoBehaviour
             Destroy(gameObject);
 
         if (group)
-            group.alpha = 0f;
+        {
+            group.alpha = 0f;               // start invisible
+            group.interactable = false;
+            group.blocksRaycasts = false;
+            group.gameObject.SetActive(false);
+        }
 
         if (tickIcon)
             tickIcon.SetActive(false);

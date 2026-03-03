@@ -11,8 +11,8 @@ public class QuestManager : MonoBehaviour
     public ScreenDirectionArrow arrow;
 
     [Header("Explore Objective")]
-    public Transform[] arrowTargets;   // where the arrow points
-    public Transform[] triggerPoints; // where player must reach
+    public Transform[] arrowTargets;
+    public Transform[] triggerPoints;
     private int exploreIndex;
 
     [Header("Objectives")]
@@ -21,7 +21,7 @@ public class QuestManager : MonoBehaviour
     public DoorInteractable door;
 
     [Header("Player")]
-    public Transform player; // 🔥 IMPORTANT
+    public Transform player;
 
     private int currentObjective = 0;
     private float timer;
@@ -29,10 +29,20 @@ public class QuestManager : MonoBehaviour
     private bool completingObjective;
     private bool questFinished;
 
+    public static QuestManager Instance;
+
+    void Awake()
+    {
+        if (Instance == null)
+            Instance = this;
+        else
+            Destroy(gameObject);
+    }
+
     void Start()
     {
         DisableArrowHard();
-        StartKeyObjective();
+        // ✅ Do NOT start key objective here — let cutscene handle UI fade
     }
 
     void Update()
@@ -43,38 +53,25 @@ public class QuestManager : MonoBehaviour
         timer += Time.deltaTime;
 
         if (!hintShown && timer >= hintDelay)
-        {
             ShowArrow();
-        }
 
         // ================= OBJECTIVE CHECKS =================
 
-        // 0 — Find Key
         if (currentObjective == 0 && GameState.HasKey)
         {
             completingObjective = true;
-            CompleteObjective(StartDoorObjective);
+            CompleteObjective(StartDoorObjective, 10);
         }
-
-        // 1 — Open Door
         else if (currentObjective == 1 && door.IsOpen)
         {
             completingObjective = true;
-            CompleteObjective(StartExploreObjective);
+            CompleteObjective(StartExploreObjective, 10);
         }
-
-        // 2 — Explore Further
         else if (currentObjective == 2)
         {
-            float distance = Vector3.Distance(
-                player.position, // ✅ FIX
-                triggerPoints[exploreIndex].position
-            );
-
+            float distance = Vector3.Distance(player.position, triggerPoints[exploreIndex].position);
             if (distance < 2f)
-            {
                 AdvanceExplorePoint();
-            }
         }
     }
 
@@ -82,35 +79,35 @@ public class QuestManager : MonoBehaviour
 
     void AdvanceExplorePoint()
     {
-        completingObjective = true; // lock for this frame
-
+        completingObjective = true;
         exploreIndex++;
 
         if (exploreIndex >= arrowTargets.Length)
         {
             questFinished = true;
-            CompleteObjective(null);
+            CompleteObjective(null, 10);
         }
         else
         {
             arrow.target = arrowTargets[exploreIndex];
-            ShowArrow(); // instant redirect
+            ShowArrow();
             completingObjective = false;
         }
     }
 
     // ================= OBJECTIVES =================
 
-    void StartKeyObjective()
+    public void StartKeyObjective()
     {
         currentObjective = 0;
         ResetTimer();
 
-        QuestUI.Instance.ShowObjective("Find the key");
-
         arrow.target = keyTarget;
         DisableArrowHard();
         completingObjective = false;
+
+        // ✅ Show objective like before
+        QuestUI.Instance.ShowObjective("Find the key");
     }
 
     void StartDoorObjective()
@@ -118,18 +115,16 @@ public class QuestManager : MonoBehaviour
         currentObjective = 1;
         ResetTimer();
 
-        QuestUI.Instance.ShowObjective("Open the door");
-
         arrow.target = doorTarget;
         DisableArrowHard();
         completingObjective = false;
+
+        QuestUI.Instance.ShowObjective("Open the door");
     }
 
     void StartExploreObjective()
     {
-        // Safety check
-        if (arrowTargets.Length == 0 ||
-            arrowTargets.Length != triggerPoints.Length)
+        if (arrowTargets.Length == 0 || arrowTargets.Length != triggerPoints.Length)
         {
             Debug.LogError("Explore objective arrays are not set correctly.");
             questFinished = true;
@@ -140,27 +135,30 @@ public class QuestManager : MonoBehaviour
         exploreIndex = 0;
         ResetTimer();
 
-        QuestUI.Instance.ShowObjective("Explore further");
-
         arrow.target = arrowTargets[exploreIndex];
-        DisableArrowHard(); // wait hintDelay
+        DisableArrowHard();
         completingObjective = false;
+
+        QuestUI.Instance.ShowObjective("Explore further");
     }
 
-    void CompleteObjective(System.Action nextObjective)
+    void CompleteObjective(System.Action nextObjective, int pointsForObjective)
     {
         DisableArrowHard();
-        StartCoroutine(CompleteAndAdvance(nextObjective));
+        StartCoroutine(CompleteAndAdvance(nextObjective, pointsForObjective));
     }
 
-    IEnumerator CompleteAndAdvance(System.Action nextObjective)
+    IEnumerator CompleteAndAdvance(System.Action nextObjective, int pointsForObjective)
     {
         QuestUI.Instance.PlayObjectiveComplete();
 
         while (QuestUI.Instance.IsAnimating)
             yield return null;
 
-        yield return null; // safety frame
+        yield return null;
+
+        // ✅ Add points for story progress
+        StoryProgress.Instance.AddPointsSmooth(pointsForObjective);
 
         if (nextObjective != null)
             nextObjective.Invoke();
@@ -199,11 +197,7 @@ public class QuestManager : MonoBehaviour
     {
         while (!Mathf.Approximately(arrowGroup.alpha, targetAlpha))
         {
-            arrowGroup.alpha = Mathf.MoveTowards(
-                arrowGroup.alpha,
-                targetAlpha,
-                Time.deltaTime * 4f
-            );
+            arrowGroup.alpha = Mathf.MoveTowards(arrowGroup.alpha, targetAlpha, Time.deltaTime * 4f);
             yield return null;
         }
     }
