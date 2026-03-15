@@ -1,11 +1,9 @@
-// ProximityBookInteractable.cs
 using UnityEngine;
 
 [RequireComponent(typeof(SphereCollider))]
 public class ProximityBookInteractable : MonoBehaviour, IInteractable
 {
     public BookData book;
-    [Tooltip("Optional override for prompt text.")]
     public string promptOverride = "Press [E] to Interact";
 
     public string Prompt => string.IsNullOrEmpty(promptOverride) ? "Press [E] to Interact" : promptOverride;
@@ -31,6 +29,7 @@ public class ProximityBookInteractable : MonoBehaviour, IInteractable
 
     public void Interact(PlayerProximityInteractor interactor)
     {
-        if (book != null) BookUI.Instance.Open(book);
+        if (book != null)
+            BookUI.Instance.Open(book);
     }
 }

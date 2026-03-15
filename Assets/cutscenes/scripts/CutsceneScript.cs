@@ -27,9 +27,10 @@ public class CutsceneScript : MonoBehaviour
 {
     [Header("AUTO")]
     public bool playOnSceneLoad = false;
-    public CutsceneScript nextCutscene; // optional chain
+    public CutsceneScript nextCutscene;
 
-   
+    [Header("Debug")]
+    public bool skipCutscene = false;
 
     [Header("UI")]
     public GameObject cutsceneCanvas;
@@ -50,6 +51,7 @@ public class CutsceneScript : MonoBehaviour
     [Header("Quest UI Canvas Fade")]
     public CanvasGroup questCanvasGroup;
     public float questFadeTime = 1f;
+    bool questUIShown = false;
 
     [Header("Timing")]
     public float blackHoldTime = 1f;
@@ -64,51 +66,71 @@ public class CutsceneScript : MonoBehaviour
     Coroutine textRoutine;
     bool allowFlicker = true;
 
-    void Start()
-    {
-        originalPos = cutsceneImage.rectTransform.anchoredPosition;
-
-        // Play automatically only if enabled
-        if (playOnSceneLoad)
-            Play();
-    }
     void Awake()
     {
         if (questCanvasGroup != null)
         {
-            questCanvasGroup.alpha = 0f;          // start fully transparent
+            questCanvasGroup.alpha = 0f;
             questCanvasGroup.interactable = false;
             questCanvasGroup.blocksRaycasts = false;
-            questCanvasGroup.gameObject.SetActive(false); // completely disabled
+            questCanvasGroup.gameObject.SetActive(false);
         }
     }
+
+    void Start()
+    {
+        originalPos = cutsceneImage.rectTransform.anchoredPosition;
+
+        if (playOnSceneLoad)
+            Play();
+    }
+
     public void Play()
     {
+        // DEBUG: skip this cutscene entirely
+        if (skipCutscene)
+        {
+            StartCoroutine(SkipCutsceneRoutine());
+            return;
+        }
+
         if (cutsceneCanvas == null)
         {
             Debug.LogError("CutsceneCanvas is not assigned!");
             return;
         }
 
-        
-            // Activate the cutscene GameObject (in case it was inactive)
-            gameObject.SetActive(true);
+        gameObject.SetActive(true);
 
-            // Activate canvas
-            cutsceneCanvas.SetActive(true);
-            fadeOverlay.gameObject.SetActive(true);
-            cutsceneImage.gameObject.SetActive(true);
-            cutsceneText.gameObject.SetActive(true);
+        cutsceneCanvas.SetActive(true);
+        fadeOverlay.gameObject.SetActive(true);
+        cutsceneImage.gameObject.SetActive(true);
+        cutsceneText.gameObject.SetActive(true);
 
-            // Reset everything
-            SetAlpha(fadeOverlay, 1f);
-            SetAlpha(cutsceneImage, 0f);
-            SetTextAlpha(0f);
-            cutsceneImage.rectTransform.anchoredPosition = originalPos;
-            allowFlicker = true;
+        SetAlpha(fadeOverlay, 1f);
+        SetAlpha(cutsceneImage, 0f);
+        SetTextAlpha(0f);
 
-            StartCoroutine(RunCutscene());
-        
+        cutsceneImage.rectTransform.anchoredPosition = originalPos;
+        allowFlicker = true;
+
+        StartCoroutine(RunCutscene());
+    }
+
+    IEnumerator SkipCutsceneRoutine()
+    {
+        // make sure time is normal
+        Time.timeScale = 1f;
+
+        if (cutsceneCanvas != null)
+            cutsceneCanvas.SetActive(false);
+
+        // run post-cutscene logic
+        yield return PlayPostCutsceneImage();
+
+        // continue chain
+        if (nextCutscene != null)
+            nextCutscene.Play();
     }
 
     IEnumerator PlayPostCutsceneImage()
@@ -117,7 +139,6 @@ public class CutsceneScript : MonoBehaviour
         {
             postCutsceneImage.gameObject.SetActive(true);
 
-            // Fade In
             float t = 0f;
             while (t < postFadeInTime)
             {
@@ -125,12 +146,11 @@ public class CutsceneScript : MonoBehaviour
                 SetAlpha(postCutsceneImage, t / postFadeInTime);
                 yield return null;
             }
+
             SetAlpha(postCutsceneImage, 1f);
 
-            // Stay
             yield return new WaitForSecondsRealtime(postStayTime);
 
-            // Fade Out
             t = 0f;
             while (t < postFadeOutTime)
             {
@@ -138,37 +158,46 @@ public class CutsceneScript : MonoBehaviour
                 SetAlpha(postCutsceneImage, 1f - (t / postFadeOutTime));
                 yield return null;
             }
+
             SetAlpha(postCutsceneImage, 0f);
             postCutsceneImage.gameObject.SetActive(false);
         }
 
-
-
-        // Fade in the Quest UI AFTER post image fades out
-        if (questCanvasGroup != null)
+        // Fade in quest UI
+        if (questCanvasGroup != null && !questUIShown)
         {
             questCanvasGroup.gameObject.SetActive(true);
             questCanvasGroup.interactable = true;
             questCanvasGroup.blocksRaycasts = true;
 
             yield return StartCoroutine(FadeQuestCanvas(1f));
-            questCanvasGroup.alpha = 1f;   // FORCE full alpha
+            questCanvasGroup.alpha = 1f;
+
+            questUIShown = true;
         }
 
-        // ✅ NOW start first objective AFTER fade
-        QuestManager.Instance.StartKeyObjective();
+        // 🔹 START QUEST SYSTEM (NEW)
+        if (QuestManager.Instance != null)
+        {
+            if (!QuestManager.Instance.QuestStarted)
+            {
+                QuestManager.Instance.BeginQuest(); // start only once
+            }
+            else
+            {
+                QuestManager.Instance.ShowCurrentObjective(); // show current progress
+            }
+        }
     }
 
     IEnumerator RunCutscene()
     {
-
-
-        // Freeze game (player, objectives, etc.)
         Time.timeScale = 0f;
 
         yield return new WaitForSecondsRealtime(blackHoldTime);
 
         Coroutine drawingsRoutine = null;
+
         if (drawings.Length > 0)
             drawingsRoutine = StartCoroutine(PlayAllDrawings());
 
@@ -189,11 +218,13 @@ public class CutsceneScript : MonoBehaviour
         if (drawings.Length > 0)
         {
             Drawing lastDrawing = drawings[drawings.Length - 1];
+
             Coroutine flickerRoutine = StartCoroutine(FlickerLastDrawing(lastDrawing));
 
             yield return FadeImageOut();
 
             allowFlicker = false;
+
             StopCoroutine(flickerRoutine);
         }
 
@@ -204,9 +235,9 @@ public class CutsceneScript : MonoBehaviour
         cutsceneCanvas.SetActive(false);
 
         Time.timeScale = 1f;
+
         yield return PlayPostCutsceneImage();
 
-        // Play next cutscene if chained
         if (nextCutscene != null)
             nextCutscene.Play();
     }
@@ -218,13 +249,14 @@ public class CutsceneScript : MonoBehaviour
 
         while (t < questFadeTime)
         {
-            t += Time.unscaledDeltaTime;  // important, works even if game is paused
+            t += Time.unscaledDeltaTime;
             questCanvasGroup.alpha = Mathf.Lerp(start, target, t / questFadeTime);
             yield return null;
         }
 
         questCanvasGroup.alpha = target;
     }
+
     IEnumerator PlayAllDrawings()
     {
         foreach (var d in drawings)
@@ -288,6 +320,7 @@ public class CutsceneScript : MonoBehaviour
         }
 
         SetTextAlpha(1f);
+
         yield return new WaitForSecondsRealtime(t.stayTime);
 
         for (float i = 0; i < t.fadeOutTime; i += Time.unscaledDeltaTime)
@@ -302,25 +335,32 @@ public class CutsceneScript : MonoBehaviour
     IEnumerator FadeImageIn()
     {
         float t = 0f;
+
         while (t < imageFadeInTime)
         {
             t += Time.unscaledDeltaTime;
             SetAlpha(cutsceneImage, t / imageFadeInTime);
             yield return null;
         }
+
         SetAlpha(cutsceneImage, 1f);
     }
 
     IEnumerator FadeImageOut()
     {
         float t = 0f;
+
         while (t < imageFadeOutTime)
         {
             t += Time.unscaledDeltaTime;
+
             float eased = Mathf.SmoothStep(0f, 1f, t / imageFadeOutTime);
+
             SetAlpha(cutsceneImage, 1f - eased);
+
             yield return null;
         }
+
         SetAlpha(cutsceneImage, 0f);
     }
 
@@ -331,7 +371,9 @@ public class CutsceneScript : MonoBehaviour
         while (t < blackFadeOutTime)
         {
             t += Time.unscaledDeltaTime;
+
             SetAlpha(fadeOverlay, 1f - t / blackFadeOutTime);
+
             yield return null;
         }
 

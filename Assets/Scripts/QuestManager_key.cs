@@ -1,190 +1,218 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class QuestManager : MonoBehaviour
 {
+    public static QuestManager Instance;
+
     [Header("Quest Settings")]
     public float hintDelay = 30f;
+
+    public bool QuestStarted { get; private set; } = false;
 
     [Header("Arrow")]
     public CanvasGroup arrowGroup;
     public ScreenDirectionArrow arrow;
 
-    [Header("Explore Objective")]
-    public Transform[] arrowTargets;
-    public Transform[] triggerPoints;
-    private int exploreIndex;
-
-    [Header("Objectives")]
-    public Transform keyTarget;
-    public Transform doorTarget;
-    public DoorInteractable door;
-
     [Header("Player")]
     public Transform player;
 
-    private int currentObjective = 0;
-    private float timer;
-    private bool hintShown;
-    private bool completingObjective;
-    private bool questFinished;
+    [Header("Objectives")]
+    public Objective[] objectives;
 
-    public static QuestManager Instance;
+    [Header("Interactables")]
+    public DoorInteractable doorInteractable;
+    public ProximityBookInteractable bookInteractable;
+    public BedInteractable bedInteractable;
+
+    public int CurrentObjectiveIndex => currentObjectiveIndex;
+
+    int currentObjectiveIndex = 0;
+    int currentStepIndex = 0;
+
+    float timer;
+    bool hintShown;
+    bool completingObjective;
+    bool questFinished;
+
+    Coroutine arrowFadeRoutine;
+    Coroutine completeRoutine;
+
+    Objective CurrentObjective => objectives[currentObjectiveIndex];
 
     void Awake()
     {
-        if (Instance == null)
-            Instance = this;
-        else
-            Destroy(gameObject);
-    }
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
 
-    void Start()
-    {
-        DisableArrowHard();
-        // ✅ Do NOT start key objective here — let cutscene handle UI fade
+        // Initially: door active, book and bed hidden
+        if (doorInteractable) doorInteractable.gameObject.SetActive(true);
+        if (bookInteractable) bookInteractable.gameObject.SetActive(false);
+        if (bedInteractable) bedInteractable.gameObject.SetActive(false);
     }
 
     void Update()
     {
-        if (questFinished || completingObjective)
-            return;
+        if (questFinished || completingObjective) return;
 
         timer += Time.deltaTime;
+        if (!hintShown && timer >= hintDelay) ShowArrow();
 
-        if (!hintShown && timer >= hintDelay)
-            ShowArrow();
+        CheckObjective();
+    }
 
-        // ================= OBJECTIVE CHECKS =================
+    public void BeginQuest()
+    {
+        if (objectives.Length == 0 || QuestStarted) return;
 
-        if (currentObjective == 0 && GameState.HasKey)
+        QuestStarted = true;
+        currentObjectiveIndex = 0;
+        currentStepIndex = 0;
+        StartObjective();
+    }
+
+    public void ShowCurrentObjective()
+    {
+        if (objectives.Length == 0 || questFinished) return;
+
+        Objective obj = CurrentObjective;
+        QuestUI.Instance.ShowObjective(obj.objectiveName);
+
+        UpdateArrowTarget();
+        ResetTimer();
+        ShowArrow();
+    }
+
+    void StartObjective()
+    {
+        Objective obj = CurrentObjective;
+
+        ResetTimer();
+        DisableArrowHard();
+
+        currentStepIndex = 0;
+        UpdateArrowTarget();
+
+        QuestUI.Instance.ShowObjective(obj.objectiveName);
+        completingObjective = false;
+
+        UpdateInteractablesForObjective(currentObjectiveIndex);
+    }
+
+    void UpdateArrowTarget()
+    {
+        Objective obj = CurrentObjective;
+        if (obj.arrowTargets != null && obj.arrowTargets.Length > currentStepIndex)
+            arrow.target = obj.arrowTargets[currentStepIndex];
+        else
+            arrow.target = obj.arrowTarget;
+    }
+
+    void CheckObjective()
+    {
+        Objective obj = CurrentObjective;
+
+        bool completed = false;
+
+        switch (obj.type)
+        {
+            case ObjectiveType.CollectKey:
+                completed = GameState.HasKey;
+                break;
+
+            case ObjectiveType.OpenDoor:
+                if (obj.door != null) completed = obj.door.IsOpen;
+                break;
+
+            case ObjectiveType.ReachLocation:
+                // handled manually for triggers
+                return;
+        }
+
+        if (completed)
         {
             completingObjective = true;
-            CompleteObjective(StartDoorObjective, 10);
-        }
-        else if (currentObjective == 1 && door.IsOpen)
-        {
-            completingObjective = true;
-            CompleteObjective(StartExploreObjective, 10);
-        }
-        else if (currentObjective == 2)
-        {
-            float distance = Vector3.Distance(player.position, triggerPoints[exploreIndex].position);
-            if (distance < 2f)
-                AdvanceExplorePoint();
+            CompleteObjective(obj.pointsReward);
         }
     }
 
-    // ================= EXPLORE LOGIC =================
-
-    void AdvanceExplorePoint()
+    public bool IsCorrectTrigger(int objectiveIndex, int stepIndex)
     {
-        completingObjective = true;
-        exploreIndex++;
+        return currentObjectiveIndex == objectiveIndex &&
+               currentStepIndex == stepIndex;
+    }
 
-        if (exploreIndex >= arrowTargets.Length)
+    public void TriggerReached()
+    {
+        if (questFinished || completingObjective) return;
+
+        AdvanceStep();
+    }
+
+    void AdvanceStep()
+    {
+        Objective obj = CurrentObjective;
+        currentStepIndex++;
+
+        if (obj.triggerPoints == null || currentStepIndex >= obj.triggerPoints.Length)
         {
-            questFinished = true;
-            CompleteObjective(null, 10);
+            completingObjective = true;
+            CompleteObjective(obj.pointsReward);
         }
         else
         {
-            arrow.target = arrowTargets[exploreIndex];
-            ShowArrow();
             completingObjective = false;
+            UpdateArrowTarget();
+            ResetTimer();
+            ShowArrow();
         }
     }
 
-    // ================= OBJECTIVES =================
-
-    public void StartKeyObjective()
-    {
-        currentObjective = 0;
-        ResetTimer();
-
-        arrow.target = keyTarget;
-        DisableArrowHard();
-        completingObjective = false;
-
-        // ✅ Show objective like before
-        QuestUI.Instance.ShowObjective("Find the key");
-    }
-
-    void StartDoorObjective()
-    {
-        currentObjective = 1;
-        ResetTimer();
-
-        arrow.target = doorTarget;
-        DisableArrowHard();
-        completingObjective = false;
-
-        QuestUI.Instance.ShowObjective("Open the door");
-    }
-
-    void StartExploreObjective()
-    {
-        if (arrowTargets.Length == 0 || arrowTargets.Length != triggerPoints.Length)
-        {
-            Debug.LogError("Explore objective arrays are not set correctly.");
-            questFinished = true;
-            return;
-        }
-
-        currentObjective = 2;
-        exploreIndex = 0;
-        ResetTimer();
-
-        arrow.target = arrowTargets[exploreIndex];
-        DisableArrowHard();
-        completingObjective = false;
-
-        QuestUI.Instance.ShowObjective("Explore further");
-    }
-
-    void CompleteObjective(System.Action nextObjective, int pointsForObjective)
+    void CompleteObjective(int points)
     {
         DisableArrowHard();
-        StartCoroutine(CompleteAndAdvance(nextObjective, pointsForObjective));
+
+        if (completeRoutine != null) StopCoroutine(completeRoutine);
+        completeRoutine = StartCoroutine(CompleteAndAdvance(points));
     }
 
-    IEnumerator CompleteAndAdvance(System.Action nextObjective, int pointsForObjective)
+    IEnumerator CompleteAndAdvance(int points)
     {
         QuestUI.Instance.PlayObjectiveComplete();
 
-        while (QuestUI.Instance.IsAnimating)
-            yield return null;
+        while (QuestUI.Instance.IsAnimating) yield return null;
 
-        yield return null;
+        StoryProgress.Instance.AddPointsSmooth(points);
 
-        // ✅ Add points for story progress
-        StoryProgress.Instance.AddPointsSmooth(pointsForObjective);
+        currentObjectiveIndex++;
 
-        if (nextObjective != null)
-            nextObjective.Invoke();
+        if (currentObjectiveIndex >= objectives.Length)
+        {
+            questFinished = true;
+            yield break;
+        }
+
+        StartObjective();
     }
-
-    // ================= ARROW CONTROL =================
 
     void ShowArrow()
     {
         hintShown = true;
-
         arrow.enabled = true;
         arrowGroup.gameObject.SetActive(true);
 
-        StopAllCoroutines();
-        StartCoroutine(FadeArrow(1f));
+        if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
+        arrowFadeRoutine = StartCoroutine(FadeArrow(1f));
     }
 
     void DisableArrowHard()
     {
         hintShown = false;
 
-        StopAllCoroutines();
+        if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
 
-        if (arrow)
-            arrow.enabled = false;
+        if (arrow) arrow.enabled = false;
 
         if (arrowGroup)
         {
@@ -207,4 +235,35 @@ public class QuestManager : MonoBehaviour
         timer = 0f;
         hintShown = false;
     }
+
+    /// <summary>
+    /// 🔹 Updates the visibility of door/book/bed based on objective index.
+    /// Only one interactable shows its prompt depending on which is closest to the player.
+    /// </summary>
+    void UpdateInteractablesForObjective(int objectiveIndex)
+    {
+        // Enable only the correct interactables
+        if (doorInteractable) doorInteractable.gameObject.SetActive(objectiveIndex < 4);
+        if (bookInteractable) bookInteractable.gameObject.SetActive(objectiveIndex == 4);
+        if (bedInteractable) bedInteractable.gameObject.SetActive(objectiveIndex == 5);
+    }
+}
+
+public enum ObjectiveType
+{
+    CollectKey,
+    OpenDoor,
+    ReachLocation
+}
+
+[System.Serializable]
+public class Objective
+{
+    public string objectiveName;
+    public ObjectiveType type;
+    public Transform arrowTarget;
+    public Transform[] arrowTargets;
+    public DoorInteractable door;
+    public Transform[] triggerPoints;
+    public int pointsReward;
 }
