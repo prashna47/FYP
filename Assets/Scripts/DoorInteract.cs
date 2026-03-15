@@ -21,6 +21,9 @@ public class DoorInteractable : MonoBehaviour, IInteractable
     public ScreenFade fader;
     public float blackScreenHoldTime = 0.5f;
 
+    bool interactionEnabled = true;
+    PlayerProximityInteractor playerInside;
+
     public string Prompt => prompt;
 
     void Reset()
@@ -31,18 +34,27 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
     void OnTriggerEnter(Collider other)
     {
-        var interactor = other.GetComponentInParent<PlayerProximityInteractor>();
+        if (!other.CompareTag("Player")) return;
+
+        var interactor = other.GetComponent<PlayerProximityInteractor>();
         if (interactor != null)
-            interactor.Register(this);
+        {
+            playerInside = interactor;
+            if (interactionEnabled)
+                interactor.Register(this);
+        }
     }
 
     void OnTriggerExit(Collider other)
     {
-        var interactor = other.GetComponentInParent<PlayerProximityInteractor>();
-        if (interactor != null)
-            interactor.Unregister(this);
+        if (!other.CompareTag("Player")) return;
 
-        prompt = "Press [E] to interact";
+        var interactor = other.GetComponent<PlayerProximityInteractor>();
+        if (interactor != null)
+        {
+            interactor.Unregister(this);
+            playerInside = null;
+        }
     }
 
     public void Interact(PlayerProximityInteractor interactor)
@@ -63,12 +75,11 @@ public class DoorInteractable : MonoBehaviour, IInteractable
                 {
                     prompt = lockedPrompt;
                     Debug.Log("Door is locked! You need a key.");
+                    return;
                 }
             }
-            else
-            {
-                StartCoroutine(TeleportWithFade(interactor, teleportPoint));
-            }
+
+            StartCoroutine(TeleportWithFade(interactor, teleportPoint));
         }
     }
 
@@ -99,12 +110,11 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
         Transform player = interactor.transform;
         CharacterController cc = player.GetComponent<CharacterController>();
-
         if (cc != null) cc.enabled = false;
 
         player.position = target.position;
 
-        camera cam = FindObjectOfType<camera>();
+        var cam = FindObjectOfType<camera>();
         if (cam != null) cam.SnapToTarget();
 
         yield return null;

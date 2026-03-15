@@ -46,10 +46,7 @@ public class QuestManager : MonoBehaviour
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
-        // Initially: door active, book and bed hidden
-        if (doorInteractable) doorInteractable.gameObject.SetActive(true);
-        if (bookInteractable) bookInteractable.gameObject.SetActive(false);
-        if (bedInteractable) bedInteractable.gameObject.SetActive(false);
+        // Do not disable any interactables — all remain visible
     }
 
     void Update()
@@ -237,15 +234,15 @@ public class QuestManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 🔹 Updates the visibility of door/book/bed based on objective index.
-    /// Only one interactable shows its prompt depending on which is closest to the player.
+    /// Updates the interactables for the current objective.
+    /// Bed interaction enabled after 5th objective, Book and Door always interactable.
     /// </summary>
     void UpdateInteractablesForObjective(int objectiveIndex)
     {
-        // Enable only the correct interactables
-        if (doorInteractable) doorInteractable.gameObject.SetActive(objectiveIndex < 4);
-        if (bookInteractable) bookInteractable.gameObject.SetActive(objectiveIndex == 4);
-        if (bedInteractable) bedInteractable.gameObject.SetActive(objectiveIndex == 5);
+        if (bedInteractable != null)
+            bedInteractable.SetInteractionEnabled(objectiveIndex >= 5);
+
+        // Book and Door remain fully functional — do not disable
     }
 }
 

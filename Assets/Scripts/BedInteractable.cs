@@ -7,96 +7,88 @@ public class BedInteractable : MonoBehaviour, IInteractable
     [Header("Prompt")]
     public string prompt = "Press [E] to Sleep";
 
-    [Header("Objective Index (Go To Bed)")]
-    public int bedObjectiveIndex = 5; // Objective 6
+    [Header("Teleport")]
+    public Transform teleportPoint;
+    public float holdBlackTime = 0.5f;
 
-    [Header("Teleport Settings")]
-    public Transform teleportPoint;        // Assign the teleport target in Inspector
-    public float holdBlackTime = 0.5f;     // Hold time while screen is black
+    [Header("Fade")]
+    public ScreenFade screenFader;
 
-    [Header("Screen Fade")]
-    public ScreenFade screenFader;         // Assign your existing ScreenFade component here
-
-    private bool isInteractable = false;   // Only allow interaction after Objective 6
+    bool interactionEnabled = false;
+    PlayerProximityInteractor playerInside;
 
     public string Prompt => prompt;
 
-    void Start()
+    void Reset()
     {
-        // Keep the bed active at all times
-        gameObject.SetActive(true);
-
-        if (screenFader == null)
-            Debug.LogWarning("ScreenFade not assigned on BedInteractable!");
+        var col = GetComponent<Collider>();
+        col.isTrigger = true;
     }
 
-    void Update()
+    public void SetInteractionEnabled(bool enabled)
     {
-        // Enable interaction only when Objective 6 starts
-        if (!isInteractable && QuestManager.Instance != null &&
-            QuestManager.Instance.CurrentObjectiveIndex == bedObjectiveIndex)
+        interactionEnabled = enabled;
+
+        if (playerInside != null)
         {
-            isInteractable = true;
+            if (interactionEnabled)
+                playerInside.Register(this);
+            else
+                playerInside.Unregister(this);
         }
     }
 
     void OnTriggerEnter(Collider other)
     {
-        if (!isInteractable) return;
+        if (!other.CompareTag("Player")) return;
 
-        var interactor = other.GetComponentInParent<PlayerProximityInteractor>();
+        var interactor = other.GetComponent<PlayerProximityInteractor>();
         if (interactor != null)
-            interactor.Register(this);
+        {
+            playerInside = interactor;
+            if (interactionEnabled)
+                playerInside.Register(this);
+        }
     }
 
     void OnTriggerExit(Collider other)
     {
-        if (!isInteractable) return;
+        if (!other.CompareTag("Player")) return;
 
-        var interactor = other.GetComponentInParent<PlayerProximityInteractor>();
+        var interactor = other.GetComponent<PlayerProximityInteractor>();
         if (interactor != null)
+        {
             interactor.Unregister(this);
+            playerInside = null;
+        }
     }
 
     public void Interact(PlayerProximityInteractor interactor)
     {
-        if (!isInteractable) return;
+        if (!interactionEnabled) return;
 
-        // Clear any existing prompt
-        interactor.ClearAllInteractables();
-
-        // Complete the objective
-        if (QuestManager.Instance != null &&
-            QuestManager.Instance.CurrentObjectiveIndex == bedObjectiveIndex)
-        {
-            QuestManager.Instance.TriggerReached();
-        }
-
-        // Fade + teleport
-        if (teleportPoint != null && screenFader != null)
-        {
-            StartCoroutine(FadeAndTeleport(interactor.transform));
-        }
+        StartCoroutine(SleepSequence(interactor));
     }
 
-    IEnumerator FadeAndTeleport(Transform player)
+    IEnumerator SleepSequence(PlayerProximityInteractor interactor)
     {
-        // Fade out
-        yield return screenFader.FadeOut();
+        if (screenFader != null)
+            yield return screenFader.FadeOut();
 
-        // Hold black
         yield return new WaitForSeconds(holdBlackTime);
 
-        // Teleport player
+        Transform player = interactor.transform;
         CharacterController cc = player.GetComponent<CharacterController>();
         if (cc != null) cc.enabled = false;
 
         player.position = teleportPoint.position;
-        player.rotation = teleportPoint.rotation;
 
         if (cc != null) cc.enabled = true;
 
-        // Fade in
-        yield return screenFader.FadeIn();
+        if (screenFader != null)
+            yield return screenFader.FadeIn();
+
+        if (QuestManager.Instance != null)
+            QuestManager.Instance.TriggerReached();
     }
 }
