@@ -12,7 +12,7 @@ public class BedInteractable : MonoBehaviour, IInteractable
     public float holdBlackTime = 0.5f;
 
     [Header("Fade")]
-    public ScreenFade screenFader;
+    public ScreenFade fader;
 
     bool interactionEnabled = false;
     PlayerProximityInteractor playerInside;
@@ -65,29 +65,48 @@ public class BedInteractable : MonoBehaviour, IInteractable
 
     public void Interact(PlayerProximityInteractor interactor)
     {
-        if (!interactionEnabled) return;
+        if (!interactionEnabled || interactor == null) return;
 
-        StartCoroutine(SleepSequence(interactor));
+        StartCoroutine(SleepWithFade(interactor));
     }
 
-    IEnumerator SleepSequence(PlayerProximityInteractor interactor)
+    IEnumerator SleepWithFade(PlayerProximityInteractor interactor)
     {
-        if (screenFader != null)
-            yield return screenFader.FadeOut();
+        // ✅ Fade out first
+        if (fader != null)
+            yield return fader.FadeOut();
 
         yield return new WaitForSeconds(holdBlackTime);
 
+        // ✅ Clear interactables/items
+        interactor.ClearAllInteractables();
+        var itemHandler = interactor.GetComponent<PlayerItemHandler>();
+        if (itemHandler != null)
+            itemHandler.ClearNearbyItem();
+
+        // ✅ Teleport player while screen is black
         Transform player = interactor.transform;
         CharacterController cc = player.GetComponent<CharacterController>();
         if (cc != null) cc.enabled = false;
 
         player.position = teleportPoint.position;
 
+        // ✅ Snap camera if using custom camera script
+        var cam = FindObjectOfType<camera>();
+        if (cam != null)
+            cam.SnapToTarget();
+
+        // Wait a frame to let camera catch up
+        yield return null;
+        yield return new WaitForEndOfFrame();
+
         if (cc != null) cc.enabled = true;
 
-        if (screenFader != null)
-            yield return screenFader.FadeIn();
+        // ✅ Fade back in
+        if (fader != null)
+            yield return fader.FadeIn();
 
+        // ✅ Optional: trigger quest progression
         if (QuestManager.Instance != null)
             QuestManager.Instance.TriggerReached();
     }

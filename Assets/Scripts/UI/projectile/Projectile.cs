@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class OrbProjectile : MonoBehaviour
 {
@@ -52,6 +52,12 @@ public class OrbProjectile : MonoBehaviour
     {
         if (collision.gameObject.CompareTag("Player"))
             return;
+
+        Enemy enemy = collision.gameObject.GetComponent<Enemy>();
+        if (enemy != null)
+        {
+            enemy.TakeDamage(1); // 🔥 damage amount
+        }
 
         Impact();
     }

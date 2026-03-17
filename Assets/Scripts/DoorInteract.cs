@@ -70,6 +70,10 @@ public class DoorInteractable : MonoBehaviour, IInteractable
                 {
                     UnlockDoor();
                     prompt = unlockedPrompt;
+
+                    // ✅ DESTROY THE KEY AFTER USE
+                    Destroy(playerItemHandler.carriedItem);
+                    playerItemHandler.carriedItem = null; // clear reference
                 }
                 else
                 {

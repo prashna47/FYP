@@ -1,16 +1,19 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class PlayerAttack : MonoBehaviour
 {
     public GameObject orbPrefab;
     public Transform firePoint;
     public Camera mainCamera;
+    public bool canAttack = false;
 
     public float fireRate = 0.4f;
     private float nextFireTime = 0f;
 
     void Update()
     {
+        if (!canAttack) return; // ❌ block attack outside zone
+
         if (Input.GetMouseButtonDown(0) && Time.time > nextFireTime)
         {
             nextFireTime = Time.time + fireRate;
