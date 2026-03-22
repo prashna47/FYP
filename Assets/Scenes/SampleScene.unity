@@ -11853,12 +11853,12 @@ PrefabInstance:
     - target: {fileID: 3820741013839462605, guid: 0737acb13a4e6144bac8f83d78376d52,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.69
+      value: 1.73
       objectReference: {fileID: 0}
     - target: {fileID: 3820741013839462605, guid: 0737acb13a4e6144bac8f83d78376d52,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: -15.74
+      value: -15.89
       objectReference: {fileID: 0}
     - target: {fileID: 3820741013839462605, guid: 0737acb13a4e6144bac8f83d78376d52,
         type: 3}
@@ -16735,7 +16735,7 @@ MonoBehaviour:
   lockedPrompt: Door is Locked. You need a key
   unlockedPrompt: Press [E] to Open Door
   isLocked: 0
-  fader: {fileID: 0}
+  fader: {fileID: 145395220}
   blackScreenHoldTime: 0.5
 --- !u!65 &1255147900
 BoxCollider:
@@ -25297,12 +25297,12 @@ PrefabInstance:
     - target: {fileID: 3820741013839462605, guid: 0737acb13a4e6144bac8f83d78376d52,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.78
+      value: 1.97
       objectReference: {fileID: 0}
     - target: {fileID: 3820741013839462605, guid: 0737acb13a4e6144bac8f83d78376d52,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: -34.28
+      value: -34.2
       objectReference: {fileID: 0}
     - target: {fileID: 3820741013839462605, guid: 0737acb13a4e6144bac8f83d78376d52,
         type: 3}
@@ -25445,6 +25445,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 2106112101}
+    - targetCorrespondingSourceObject: {fileID: 8385226143460851807, guid: 0737acb13a4e6144bac8f83d78376d52,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2106112105}
   m_SourcePrefab: {fileID: 100100000, guid: 0737acb13a4e6144bac8f83d78376d52, type: 3}
 --- !u!4 &1937141896 stripped
 Transform:
@@ -27080,7 +27084,7 @@ MonoBehaviour:
   fadeInSpeed: 6
   fadeOutSpeed: 3
   hideDelay: 2.5
-  ghostDelay: 0.7
+  ghostDelay: 0.4
   ghostDrainSpeed: 2.5
   punchScale: 1.15
   punchDuration: 0.12
@@ -27400,6 +27404,22 @@ MonoBehaviour:
   mainCamera: {fileID: 330585545}
   canAttack: 0
   fireRate: 0.4
+--- !u!114 &2106112105
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2106112088}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 455265c22d96d7d4ba6d979745d6ce32, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxHP: 10
+  healthSlider: {fileID: 0}
+  healthText: {fileID: 0}
+  invincibilityTime: 0.5
 --- !u!1 &2107889674 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 5233112405309087440, guid: ee6743069d8e9c340a81b215ce013dbd,

@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using UnityEngine.Analytics;
 
 public class Enemy : MonoBehaviour
 {
@@ -9,7 +8,6 @@ public class Enemy : MonoBehaviour
 
     [Header("Health Bar")]
     public GameObject healthBarPrefab;
-    // Drag the dedicated UI Canvas (Screen Space Overlay, Sort Order 10+) here
     public Canvas uiCanvas;
 
     [Header("Movement")]
@@ -17,45 +15,117 @@ public class Enemy : MonoBehaviour
     public float wanderRadius = 5f;
     public float waitTime = 2f;
 
+    [Header("Attack")]
+    public float attackRange = 3f;
+    public float attackCooldown = 3f;
+    public int attackDamage = 1;
+    public float jumpHeight = 3f;
+    public float jumpDuration = 0.6f;
+    public float postAttackWanderTime = 3f;   // how long it wanders before attacking again
+
     [Header("Death")]
     public float destroyDelay = 2f;
 
     private EnemyHealthBar healthBar;
     private Animator animator;
+    private Collider col;
+    private Transform player;
+
     private bool isDead = false;
+    private bool isAttacking = false;
+    private bool isPostAttackWander = false;   // currently in forced wander window
+
+    private Vector3 spawnPosition;
     private Vector3 targetPosition;
     private float waitTimer;
+
+    private float cooldownTimer = 0f;
+    private float postAttackWanderTimer = 0f;  // counts up during forced wander
+    private float jumpTimer = 0f;
+    private Vector3 jumpStartPos;
+    private Vector3 jumpEndPos;
+    private bool damageDealt = false;
+
+    private static readonly int HashJumpStart = Animator.StringToHash("JumpStart");
+    private static readonly int HashJumpUp = Animator.StringToHash("JumpUp");
+    private static readonly int HashJumpUpToDown = Animator.StringToHash("JumpUpToDown");
+    private static readonly int HashJumpDown = Animator.StringToHash("JumpDown");
+    private static readonly int HashJumpLand = Animator.StringToHash("JumpLand");
+    private static readonly int HashHit = Animator.StringToHash("Hit");
+    private static readonly int HashDie = Animator.StringToHash("Die");
 
     void Start()
     {
         currentHP = maxHP;
         animator = GetComponent<Animator>();
+        col = GetComponent<Collider>();
+        spawnPosition = transform.position;
+
+        GameObject p = GameObject.FindWithTag("Player");
+        if (p != null) player = p.transform;
 
         SpawnHealthBar();
         SetNewTarget();
-    }
-
-    void SpawnHealthBar()
-    {
-        if (healthBarPrefab == null) return;
-
-        // Use the dedicated overlay canvas to bypass your pixelation shader
-        Canvas targetCanvas = uiCanvas != null ? uiCanvas : FindObjectOfType<Canvas>();
-        if (targetCanvas == null) return;
-
-        GameObject hb = Instantiate(healthBarPrefab, targetCanvas.transform);
-        healthBar = hb.GetComponent<EnemyHealthBar>();
-        healthBar.SetTarget(transform);
     }
 
     void Update()
     {
         if (isDead) return;
 
+        if (cooldownTimer > 0f)
+            cooldownTimer -= Time.deltaTime;
+
+        if (isAttacking)
+        {
+            UpdateJumpAttack();
+            return;
+        }
+
+        // ── post-attack wander window ─────────────────────────────
+        if (isPostAttackWander)
+        {
+            postAttackWanderTimer += Time.deltaTime;
+            if (postAttackWanderTimer >= postAttackWanderTime)
+            {
+                isPostAttackWander = false;
+                postAttackWanderTimer = 0f;
+            }
+            // just wander — skip the attack check below
+            DoWander();
+            return;
+        }
+
+        // ── check whether to attack ───────────────────────────────
+        if (player != null && cooldownTimer <= 0f)
+        {
+            float distToPlayer = Vector3.Distance(transform.position, player.position);
+            if (distToPlayer <= attackRange)
+            {
+                StartJumpAttack();
+                return;
+            }
+        }
+
+        DoWander();
+    }
+
+    // ── pulled wander logic into its own method so both paths can call it ──
+    void DoWander()
+    {
         float dist = Vector3.Distance(transform.position, targetPosition);
         if (dist > 0.2f)
         {
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+            transform.position = Vector3.MoveTowards(
+                transform.position, targetPosition, moveSpeed * Time.deltaTime);
+
+            // flip sprite to face movement direction — no rotation, just scale X
+            float dir = targetPosition.x - transform.position.x;
+            if (Mathf.Abs(dir) > 0.01f)
+            {
+                Vector3 s = transform.localScale;
+                s.x = Mathf.Abs(s.x) * (dir > 0 ? 1f : -1f);
+                transform.localScale = s;
+            }
         }
         else
         {
@@ -64,43 +134,121 @@ public class Enemy : MonoBehaviour
         }
     }
 
+    void StartJumpAttack()
+    {
+        isAttacking = true;
+        damageDealt = false;
+        jumpTimer = 0f;
+        jumpStartPos = transform.position;
+        jumpEndPos = player.position;
+        jumpEndPos.y = transform.position.y;
+
+        // flip to face player — no rotation
+        float dir = jumpEndPos.x - transform.position.x;
+        if (Mathf.Abs(dir) > 0.01f)
+        {
+            Vector3 s = transform.localScale;
+            s.x = Mathf.Abs(s.x) * (dir > 0 ? 1f : -1f);
+            transform.localScale = s;
+        }
+
+        animator.SetTrigger(HashJumpStart);
+    }
+
+    void UpdateJumpAttack()
+    {
+        jumpTimer += Time.deltaTime;
+        float t = Mathf.Clamp01(jumpTimer / jumpDuration);
+
+        Vector3 flatPos = Vector3.Lerp(jumpStartPos, jumpEndPos, t);
+        flatPos.y = Mathf.Lerp(jumpStartPos.y, jumpEndPos.y, t)
+                          + jumpHeight * Mathf.Sin(t * Mathf.PI);
+        transform.position = flatPos;
+
+        if (t < 0.25f) animator.SetTrigger(HashJumpUp);
+        else if (t < 0.50f) animator.SetTrigger(HashJumpUpToDown);
+        else if (t < 0.90f) animator.SetTrigger(HashJumpDown);
+        else animator.SetTrigger(HashJumpLand);
+
+        if (t >= 0.90f && !damageDealt)
+        {
+            damageDealt = true;
+            TryDealDamage();
+        }
+
+        if (t >= 1f)
+        {
+            transform.position = jumpEndPos;
+            isAttacking = false;
+            cooldownTimer = attackCooldown;
+
+            // start the forced wander window instead of immediately re-attacking
+            isPostAttackWander = true;
+            postAttackWanderTimer = 0f;
+            SetNewTarget();
+        }
+    }
+
+    void TryDealDamage()
+    {
+        if (player == null) return;
+        float dist = Vector3.Distance(transform.position, player.position);
+        if (dist <= attackRange * 0.5f)
+        {
+            PlayerHealth ph = player.GetComponent<PlayerHealth>();
+            if (ph != null) ph.TakeDamage(attackDamage);
+        }
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (!isAttacking || damageDealt) return;
+        if (!other.CompareTag("Player")) return;
+        damageDealt = true;
+        PlayerHealth ph = other.GetComponent<PlayerHealth>();
+        if (ph != null) ph.TakeDamage(attackDamage);
+    }
+
     void SetNewTarget()
     {
-        Vector3 dir = Random.insideUnitSphere * wanderRadius;
-        dir.y = 0f;
-        targetPosition = transform.position + dir;
+        Vector2 randomCircle = Random.insideUnitCircle * wanderRadius;
+        targetPosition = spawnPosition + new Vector3(randomCircle.x, 0f, randomCircle.y);
     }
 
     public void TakeDamage(int damage)
     {
         if (isDead) return;
-
         currentHP = Mathf.Clamp(currentHP - damage, 0, maxHP);
-
-        if (healthBar != null)
-            healthBar.ShowHit(currentHP, maxHP);
-
-        if (animator != null)
-            animator.SetTrigger("Hit");
-
-        if (currentHP <= 0)
-            Die();
+        if (healthBar != null) healthBar.ShowHit(currentHP, maxHP);
+        if (animator != null) animator.SetTrigger(HashHit);
+        if (currentHP <= 0) Die();
     }
 
     void Die()
     {
         isDead = true;
-
-        if (animator != null)
-            animator.SetTrigger("Die");
-
-        Collider col = GetComponent<Collider>();
+        if (animator != null) animator.SetTrigger(HashDie);
         if (col != null) col.enabled = false;
-
-        // Tell the health bar to animate its own death
-        if (healthBar != null)
-            healthBar.PlayDeathAnimation();
-
+        if (healthBar != null) healthBar.PlayDeathAnimation();
         Destroy(gameObject, destroyDelay);
+    }
+
+    void SpawnHealthBar()
+    {
+        if (healthBarPrefab == null) return;
+        Canvas targetCanvas = uiCanvas != null ? uiCanvas : FindObjectOfType<Canvas>();
+        if (targetCanvas == null) return;
+        GameObject hb = Instantiate(healthBarPrefab, targetCanvas.transform);
+        healthBar = hb.GetComponent<EnemyHealthBar>();
+        healthBar.SetTarget(transform);
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(
+            Application.isPlaying ? spawnPosition : transform.position, wanderRadius);
     }
 }
