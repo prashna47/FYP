@@ -174,6 +174,7 @@ public class QuestManager : MonoBehaviour
         completeRoutine = StartCoroutine(CompleteAndAdvance(points));
     }
 
+
     IEnumerator CompleteAndAdvance(int points)
     {
         QuestUI.Instance.PlayObjectiveComplete();
@@ -181,6 +182,14 @@ public class QuestManager : MonoBehaviour
         while (QuestUI.Instance.IsAnimating) yield return null;
 
         StoryProgress.Instance.AddPointsSmooth(points);
+
+        // Show completion dialogue if any lines are set
+        Objective justCompleted = objectives[currentObjectiveIndex];
+        if (justCompleted.completionDialogue != null && justCompleted.completionDialogue.Length > 0)
+        {
+            ObjectiveDialogueUI.Instance.ShowDialogue(justCompleted.completionDialogue);
+            while (!ObjectiveDialogueUI.Instance.IsFinished) yield return null;
+        }
 
         currentObjectiveIndex++;
 
@@ -192,7 +201,6 @@ public class QuestManager : MonoBehaviour
 
         StartObjective();
     }
-
     void ShowArrow()
     {
         hintShown = true;
@@ -263,4 +271,10 @@ public class Objective
     public DoorInteractable door;
     public Transform[] triggerPoints;
     public int pointsReward;
+
+    [TextArea(2, 4)]
+    public string[] completionDialogue;
 }
+
+
+

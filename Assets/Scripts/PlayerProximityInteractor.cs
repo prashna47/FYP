@@ -64,8 +64,8 @@ public class PlayerProximityInteractor : MonoBehaviour
         current = nearest;
         SetPrompt(current);
 
-         if (current != null && Input.GetKeyDown(KeyCode.E) && !InteractionLock.NpcInRange)
-            {
+        if (current != null && Input.GetKeyDown(KeyCode.E) && !InteractionLock.NpcInRange && !InteractionLock.DialoguePlaying)
+        {
             current.Interact(this);
         }
     }
