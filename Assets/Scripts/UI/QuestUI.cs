@@ -54,7 +54,18 @@ public class QuestUI : MonoBehaviour
             yield return null;
         }
     }
-
+    public void HideImmediate()
+    {
+        StopAllCoroutines();
+        IsAnimating = false;
+        if (group)
+        {
+            group.alpha = 0f;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+        }
+        if (tickIcon) tickIcon.SetActive(false);
+    }
 
 
     public void PlayObjectiveComplete()

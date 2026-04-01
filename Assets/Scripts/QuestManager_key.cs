@@ -45,8 +45,6 @@ public class QuestManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
-
-        // Do not disable any interactables — all remain visible
     }
 
     void Update()
@@ -83,7 +81,19 @@ public class QuestManager : MonoBehaviour
 
     void StartObjective()
     {
+        if (completeRoutine != null) StopCoroutine(completeRoutine);
+        completeRoutine = StartCoroutine(StartObjectiveRoutine());
+    }
+
+    IEnumerator StartObjectiveRoutine()
+    {
         Objective obj = CurrentObjective;
+
+        // Hide any leftover quest UI before start dialogue
+        QuestUI.Instance.HideImmediate();
+
+        // Show start dialogue before objective begins
+        yield return StartCoroutine(PlayDialogueSequence(obj.startSequence));
 
         ResetTimer();
         DisableArrowHard();
@@ -96,7 +106,6 @@ public class QuestManager : MonoBehaviour
 
         UpdateInteractablesForObjective(currentObjectiveIndex);
     }
-
     void UpdateArrowTarget()
     {
         Objective obj = CurrentObjective;
@@ -123,7 +132,6 @@ public class QuestManager : MonoBehaviour
                 break;
 
             case ObjectiveType.ReachLocation:
-                // handled manually for triggers
                 return;
         }
 
@@ -174,7 +182,6 @@ public class QuestManager : MonoBehaviour
         completeRoutine = StartCoroutine(CompleteAndAdvance(points));
     }
 
-
     IEnumerator CompleteAndAdvance(int points)
     {
         QuestUI.Instance.PlayObjectiveComplete();
@@ -183,13 +190,13 @@ public class QuestManager : MonoBehaviour
 
         StoryProgress.Instance.AddPointsSmooth(points);
 
-        // Show completion dialogue if any lines are set
+        // Show completion dialogue after objective completes
         Objective justCompleted = objectives[currentObjectiveIndex];
-        if (justCompleted.completionDialogue != null && justCompleted.completionDialogue.Length > 0)
-        {
-            ObjectiveDialogueUI.Instance.ShowDialogue(justCompleted.completionDialogue);
-            while (!ObjectiveDialogueUI.Instance.IsFinished) yield return null;
-        }
+
+        // PLAYER completion dialogue
+        yield return StartCoroutine(PlayDialogueSequence(justCompleted.completionSequence));
+
+       
 
         currentObjectiveIndex++;
 
@@ -201,6 +208,7 @@ public class QuestManager : MonoBehaviour
 
         StartObjective();
     }
+
     void ShowArrow()
     {
         hintShown = true;
@@ -209,6 +217,38 @@ public class QuestManager : MonoBehaviour
 
         if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
         arrowFadeRoutine = StartCoroutine(FadeArrow(1f));
+    }
+
+    IEnumerator PlayDialogueSequence(DialogueEntry[] sequence)
+    {
+        if (sequence == null || sequence.Length == 0)
+            yield break;
+
+        foreach (var entry in sequence)
+        {
+            if (entry == null || entry.lines == null || entry.lines.Length == 0)
+                continue;
+
+            if (entry.speaker == SpeakerType.Player)
+            {
+                ObjectiveDialogueUI.Instance.ShowDialogue(
+                    entry.lines,
+                    true
+                );
+            }
+            else
+            {
+                ObjectiveDialogueUI.Instance.ShowDialogue(
+                   entry.lines,
+                   false,
+                   entry.npcPortrait,
+                   entry.npcName
+               );
+            }
+
+            while (!ObjectiveDialogueUI.Instance.IsFinished)
+                yield return null;
+        }
     }
 
     void DisableArrowHard()
@@ -241,17 +281,34 @@ public class QuestManager : MonoBehaviour
         hintShown = false;
     }
 
-    /// <summary>
-    /// Updates the interactables for the current objective.
-    /// Bed interaction enabled after 5th objective, Book and Door always interactable.
-    /// </summary>
     void UpdateInteractablesForObjective(int objectiveIndex)
     {
         if (bedInteractable != null)
             bedInteractable.SetInteractionEnabled(objectiveIndex >= 5);
-
-        // Book and Door remain fully functional — do not disable
     }
+}
+
+
+
+[System.Serializable]
+public class Objective
+{
+    public string objectiveName;
+    public ObjectiveType type;
+
+    public Transform arrowTarget;
+    public Transform[] arrowTargets;
+
+    public DoorInteractable door;
+    public Transform[] triggerPoints;
+
+    public int pointsReward;
+
+    [Header("START DIALOGUE")]
+    public DialogueEntry[] startSequence;
+
+    [Header("COMPLETION DIALOGUE")]
+    public DialogueEntry[] completionSequence;
 }
 
 public enum ObjectiveType
@@ -261,20 +318,22 @@ public enum ObjectiveType
     ReachLocation
 }
 
-[System.Serializable]
-public class Objective
+public enum SpeakerType
 {
-    public string objectiveName;
-    public ObjectiveType type;
-    public Transform arrowTarget;
-    public Transform[] arrowTargets;
-    public DoorInteractable door;
-    public Transform[] triggerPoints;
-    public int pointsReward;
-
-    [TextArea(2, 4)]
-    public string[] completionDialogue;
+    Player,
+    NPC
 }
 
+[System.Serializable]
+public class DialogueEntry
+{
+    public SpeakerType speaker;
 
+    [Header("NPC Settings (only used if speaker = NPC)")]
+    public string npcName;
+    public Sprite npcPortrait;
+
+    [TextArea(2, 4)]
+    public string[] lines;
+}
 

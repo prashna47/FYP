@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using TMPro;
 using UnityEngine;
 
@@ -10,12 +10,20 @@ public class ObjectiveDialogueUI : MonoBehaviour
     public CanvasGroup dialogBoxGroup;
     public TMP_Text dialogText;
 
+    [Header("Name UI")]
+    public TMP_Text nameText;
+
     [Header("UI Blocking")]
     public GameObject otherUIRoot;
-    public CanvasGroup promptGroup; // drag PlayerProximityInteractor's promptGroup here
+    public CanvasGroup promptGroup;
 
     [Header("Player Animation")]
-    public Animator playerAnimator;
+    Animator playerAnimator;
+
+    [Header("Character Portrait")]
+    public UnityEngine.UI.Image portraitImage;
+    public Sprite malePortrait;
+    public Sprite femalePortrait;
 
     [Header("Timing")]
     public float fadeDuration = 0.25f;
@@ -45,7 +53,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
-        InitGroup(dialogBoxGroup, visible: false);
+        InitGroup(dialogBoxGroup, false);
         if (dialogText) dialogText.text = "";
     }
 
@@ -57,8 +65,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         if (Time.time - lineStartTime < minSkipDelay) return;
 
-        bool advancePressed = AdvancePressed();
-        if (!advancePressed) return;
+        if (!AdvancePressed()) return;
 
         advanceLock = true;
 
@@ -68,9 +75,39 @@ public class ObjectiveDialogueUI : MonoBehaviour
             NextLine();
     }
 
-    public void ShowDialogue(string[] lines)
+    public void ShowDialogue(string[] lines, bool isPlayer, Sprite npcPortrait = null, string npcName = "")
     {
         if (lines == null || lines.Length == 0) return;
+
+        if (typingRoutine != null)
+            StopCoroutine(typingRoutine);
+
+        isTyping = false;
+
+        if (dialogText != null)
+            dialogText.text = "";
+
+        // ✅ SET PORTRAIT (ONLY PLACE THIS HAPPENS)
+        if (portraitImage != null)
+        {
+            if (isPlayer)
+            {
+                portraitImage.sprite = GameData.IsMale ? malePortrait : femalePortrait;
+            }
+            else
+            {
+                portraitImage.sprite = npcPortrait;
+            }
+        }
+
+        // ✅ SET NAME
+        if (nameText != null)
+        {
+            if (isPlayer)
+                nameText.text = "You";
+            else
+                nameText.text = string.IsNullOrEmpty(npcName) ? "NPC" : npcName;
+        }
 
         IsFinished = false;
         currentLines = lines;
@@ -80,26 +117,42 @@ public class ObjectiveDialogueUI : MonoBehaviour
         StartCoroutine(OpenThenType());
     }
 
+    void GetPlayerAnimator()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+            playerAnimator = player.GetComponent<Animator>();
+    }
+
     IEnumerator OpenThenType()
     {
-        // Hide all prompts and other UI
         if (otherUIRoot) otherUIRoot.SetActive(false);
+
         if (promptGroup)
         {
             promptGroup.alpha = 0f;
             promptGroup.blocksRaycasts = false;
         }
 
-        // Lock player
         PlayerControlLock.MovementLocked = true;
         InteractionLock.DialoguePlaying = true;
 
-        // Set animator to idle
-        if (playerAnimator) playerAnimator.SetFloat("Speed", 0f);
+        GetPlayerAnimator();
+
+        if (playerAnimator != null)
+            playerAnimator.SetFloat("Speed", 0f);
+
+        // ❌ IMPORTANT: DO NOT TOUCH portrait OR name here
 
         yield return new WaitForSeconds(switchDelay);
+
+        if (dialogText != null)
+            dialogText.text = "";
+
         FadeIn(dialogBoxGroup, ref dialogFadeRoutine);
+
         yield return new WaitForSeconds(fadeDuration);
+
         StartTypingLine(currentLines[lineIndex]);
     }
 
@@ -132,11 +185,9 @@ public class ObjectiveDialogueUI : MonoBehaviour
     {
         yield return new WaitForSeconds(fadeDuration);
 
-        // Restore UI
         if (otherUIRoot) otherUIRoot.SetActive(true);
         if (promptGroup) promptGroup.blocksRaycasts = true;
 
-        // Unlock player
         PlayerControlLock.MovementLocked = false;
         InteractionLock.DialoguePlaying = false;
 
@@ -146,7 +197,9 @@ public class ObjectiveDialogueUI : MonoBehaviour
     void StartTypingLine(string line)
     {
         if (!dialogText) return;
-        if (typingRoutine != null) StopCoroutine(typingRoutine);
+
+        if (typingRoutine != null)
+            StopCoroutine(typingRoutine);
 
         currentLineFull = line ?? "";
         lineStartTime = Time.time;
@@ -174,7 +227,10 @@ public class ObjectiveDialogueUI : MonoBehaviour
     void FinishCurrentLineInstant()
     {
         if (!dialogText) return;
-        if (typingRoutine != null) StopCoroutine(typingRoutine);
+
+        if (typingRoutine != null)
+            StopCoroutine(typingRoutine);
+
         typingRoutine = null;
         dialogText.text = currentLineFull;
         isTyping = false;
@@ -183,6 +239,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
     bool AdvancePressed()
     {
         if (advanceLock) return false;
+
         return Input.GetKeyDown(KeyCode.Return)
             || Input.GetKeyDown(KeyCode.KeypadEnter)
             || Input.GetMouseButtonDown(0);
@@ -191,15 +248,20 @@ public class ObjectiveDialogueUI : MonoBehaviour
     void UpdateAdvanceLock()
     {
         if (!advanceLock) return;
-        bool stillHeld = Input.GetKey(KeyCode.Return)
-            || Input.GetKey(KeyCode.KeypadEnter)
-            || Input.GetMouseButton(0);
-        if (!stillHeld) advanceLock = false;
+
+        bool stillHeld =
+            Input.GetKey(KeyCode.Return) ||
+            Input.GetKey(KeyCode.KeypadEnter) ||
+            Input.GetMouseButton(0);
+
+        if (!stillHeld)
+            advanceLock = false;
     }
 
     static void InitGroup(CanvasGroup g, bool visible)
     {
         if (!g) return;
+
         g.alpha = visible ? 1f : 0f;
         g.interactable = visible;
         g.blocksRaycasts = visible;
@@ -208,7 +270,10 @@ public class ObjectiveDialogueUI : MonoBehaviour
     void FadeIn(CanvasGroup g, ref Coroutine routine)
     {
         if (!g) return;
-        if (routine != null) StopCoroutine(routine);
+
+        if (routine != null)
+            StopCoroutine(routine);
+
         g.gameObject.SetActive(true);
         routine = StartCoroutine(FadeCanvasGroup(g, g.alpha, 1f, fadeDuration));
     }
@@ -216,7 +281,10 @@ public class ObjectiveDialogueUI : MonoBehaviour
     void FadeOut(CanvasGroup g, ref Coroutine routine)
     {
         if (!g) return;
-        if (routine != null) StopCoroutine(routine);
+
+        if (routine != null)
+            StopCoroutine(routine);
+
         routine = StartCoroutine(FadeCanvasGroup(g, g.alpha, 0f, fadeDuration));
     }
 
@@ -226,12 +294,14 @@ public class ObjectiveDialogueUI : MonoBehaviour
         g.blocksRaycasts = to > from;
 
         float t = 0f;
+
         while (t < duration)
         {
             t += Time.deltaTime;
             g.alpha = Mathf.Lerp(from, to, t / duration);
             yield return null;
         }
+
         g.alpha = to;
     }
 }

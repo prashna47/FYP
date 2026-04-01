@@ -1,17 +1,14 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
-using static UnityEngine.Rendering.DebugUI;
-using Unity.VisualScripting;
-using UnityEngine.UIElements;
 using Image = UnityEngine.UI.Image;
 
 public class EnemyHealthBar : MonoBehaviour
 {
     [Header("References")]
     public RectTransform barRoot;
-    public Image fillImage;          // Colored HP bar (front)
-    public Image ghostFill;          // White trailing bar (behind fillImage)
+    public Image fillImage;
+    public Image ghostFill;
     public Image backgroundImage;
 
     [Header("Settings")]
@@ -21,8 +18,8 @@ public class EnemyHealthBar : MonoBehaviour
     public float hideDelay = 2.5f;
 
     [Header("Ghost Bar")]
-    public float ghostDelay = 0.4f;      // Seconds before ghost starts draining
-    public float ghostDrainSpeed = 2.5f; // How fast ghost catches up
+    public float ghostDelay = 0.4f;
+    public float ghostDrainSpeed = 2.5f;
 
     [Header("Bar Punch on Hit")]
     public float punchScale = 1.15f;
@@ -33,11 +30,10 @@ public class EnemyHealthBar : MonoBehaviour
     private Transform trackedTarget;
 
     private float targetAlpha = 0f;
-    private float currentFill = 1f;     // What the colored bar shows
-    private float targetFill = 1f;      // Where colored bar is heading
-    private float ghostFillAmount = 1f; // What the ghost bar shows
-    private float ghostTimer = 0f;      // Countdown before ghost drains
-
+    private float currentFill = 1f;
+    private float targetFill = 1f;
+    private float ghostFillAmount = 1f;
+    private float ghostTimer = 0f;
     private float hideTimer = 0f;
     private bool isDying = false;
     private Coroutine punchCoroutine;
@@ -54,7 +50,6 @@ public class EnemyHealthBar : MonoBehaviour
         canvasGroup.blocksRaycasts = false;
         canvasGroup.interactable = false;
 
-        // Ghost bar starts full, white/light grey
         if (ghostFill != null)
         {
             ghostFill.fillAmount = 1f;
@@ -72,10 +67,7 @@ public class EnemyHealthBar : MonoBehaviour
         if (isDying) return;
 
         targetFill = Mathf.Clamp01((float)current / max);
-
-        // Reset ghost delay — ghost won't move until the player stops hitting
         ghostTimer = ghostDelay;
-
         targetAlpha = 1f;
         hideTimer = hideDelay;
 
@@ -106,7 +98,6 @@ public class EnemyHealthBar : MonoBehaviour
     {
         isDying = true;
 
-        // Snap colored bar to 0, drain ghost quickly
         float t = 0f;
         float startFill = currentFill;
         float startGhost = ghostFillAmount;
@@ -122,7 +113,6 @@ public class EnemyHealthBar : MonoBehaviour
             yield return null;
         }
 
-        // Fade out whole bar
         while (canvasGroup.alpha > 0f)
         {
             canvasGroup.alpha -= Time.deltaTime * fadeOutSpeed;
@@ -147,16 +137,16 @@ public class EnemyHealthBar : MonoBehaviour
             return;
         }
 
-        barRoot.position = screenPos;
+        // Move the root RectTransform in screen space
+        RectTransform rootRect = GetComponent<RectTransform>();
+        rootRect.position = screenPos;
 
-        // === Colored bar — snaps ahead fast ===
+        // === Colored bar ===
         currentFill = Mathf.Lerp(currentFill, targetFill, Time.deltaTime * 12f);
         fillImage.fillAmount = currentFill;
-
-        // Gradient color: green → yellow → red
         fillImage.color = Color.Lerp(Color.red, Color.green, currentFill);
 
-        // === Ghost bar — waits, then drains slowly ===
+        // === Ghost bar ===
         if (ghostFill != null)
         {
             if (ghostTimer > 0f)
@@ -165,7 +155,6 @@ public class EnemyHealthBar : MonoBehaviour
             }
             else
             {
-                // Ghost chases the colored bar from above
                 ghostFillAmount = Mathf.Lerp(ghostFillAmount, targetFill, Time.deltaTime * ghostDrainSpeed);
                 ghostFill.fillAmount = ghostFillAmount;
             }
