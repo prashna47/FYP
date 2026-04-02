@@ -72,19 +72,19 @@ public class BedInteractable : MonoBehaviour, IInteractable
 
     IEnumerator SleepWithFade(PlayerProximityInteractor interactor)
     {
-        // ✅ Fade out first
+        // Fade out first
         if (fader != null)
             yield return fader.FadeOut();
 
         yield return new WaitForSeconds(holdBlackTime);
 
-        // ✅ Clear interactables/items
+        // Clear interactables/items
         interactor.ClearAllInteractables();
         var itemHandler = interactor.GetComponent<PlayerItemHandler>();
         if (itemHandler != null)
             itemHandler.ClearNearbyItem();
 
-        // ✅ Teleport player while screen is black
+        // Teleport player while screen is black
         Transform player = interactor.transform;
         CharacterController cc = player.GetComponent<CharacterController>();
         if (cc != null) cc.enabled = false;

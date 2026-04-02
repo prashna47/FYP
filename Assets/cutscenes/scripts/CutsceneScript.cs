@@ -32,6 +32,8 @@ public class CutsceneScript : MonoBehaviour
     [Header("Debug")]
     public bool skipCutscene = false;
 
+    public System.Action onCutsceneFinished;
+
     [Header("UI")]
     public GameObject cutsceneCanvas;
     public Image fadeOverlay;
@@ -87,7 +89,6 @@ public class CutsceneScript : MonoBehaviour
 
     public void Play()
     {
-        // DEBUG: skip this cutscene entirely
         if (skipCutscene)
         {
             StartCoroutine(SkipCutsceneRoutine());
@@ -119,75 +120,18 @@ public class CutsceneScript : MonoBehaviour
 
     IEnumerator SkipCutsceneRoutine()
     {
-        // make sure time is normal
         Time.timeScale = 1f;
 
         if (cutsceneCanvas != null)
             cutsceneCanvas.SetActive(false);
 
-        // run post-cutscene logic
         yield return PlayPostCutsceneImage();
 
-        // continue chain
+        onCutsceneFinished?.Invoke();
+        onCutsceneFinished = null;
+
         if (nextCutscene != null)
             nextCutscene.Play();
-    }
-
-    IEnumerator PlayPostCutsceneImage()
-    {
-        if (postCutsceneImage != null)
-        {
-            postCutsceneImage.gameObject.SetActive(true);
-
-            float t = 0f;
-            while (t < postFadeInTime)
-            {
-                t += Time.unscaledDeltaTime;
-                SetAlpha(postCutsceneImage, t / postFadeInTime);
-                yield return null;
-            }
-
-            SetAlpha(postCutsceneImage, 1f);
-
-            yield return new WaitForSecondsRealtime(postStayTime);
-
-            t = 0f;
-            while (t < postFadeOutTime)
-            {
-                t += Time.unscaledDeltaTime;
-                SetAlpha(postCutsceneImage, 1f - (t / postFadeOutTime));
-                yield return null;
-            }
-
-            SetAlpha(postCutsceneImage, 0f);
-            postCutsceneImage.gameObject.SetActive(false);
-        }
-
-        // Fade in quest UI
-        if (questCanvasGroup != null && !questUIShown)
-        {
-            questCanvasGroup.gameObject.SetActive(true);
-            questCanvasGroup.interactable = true;
-            questCanvasGroup.blocksRaycasts = true;
-
-            yield return StartCoroutine(FadeQuestCanvas(1f));
-            questCanvasGroup.alpha = 1f;
-
-            questUIShown = true;
-        }
-
-        // 🔹 START QUEST SYSTEM (NEW)
-        if (QuestManager.Instance != null)
-        {
-            if (!QuestManager.Instance.QuestStarted)
-            {
-                QuestManager.Instance.BeginQuest(); // start only once
-            }
-            else
-            {
-                QuestManager.Instance.ShowCurrentObjective(); // show current progress
-            }
-        }
     }
 
     IEnumerator RunCutscene()
@@ -238,8 +182,62 @@ public class CutsceneScript : MonoBehaviour
 
         yield return PlayPostCutsceneImage();
 
+        onCutsceneFinished?.Invoke();
+        onCutsceneFinished = null;
+
         if (nextCutscene != null)
             nextCutscene.Play();
+    }
+
+    IEnumerator PlayPostCutsceneImage()
+    {
+        if (postCutsceneImage != null)
+        {
+            postCutsceneImage.gameObject.SetActive(true);
+
+            float t = 0f;
+            while (t < postFadeInTime)
+            {
+                t += Time.unscaledDeltaTime;
+                SetAlpha(postCutsceneImage, t / postFadeInTime);
+                yield return null;
+            }
+
+            SetAlpha(postCutsceneImage, 1f);
+
+            yield return new WaitForSecondsRealtime(postStayTime);
+
+            t = 0f;
+            while (t < postFadeOutTime)
+            {
+                t += Time.unscaledDeltaTime;
+                SetAlpha(postCutsceneImage, 1f - (t / postFadeOutTime));
+                yield return null;
+            }
+
+            SetAlpha(postCutsceneImage, 0f);
+            postCutsceneImage.gameObject.SetActive(false);
+        }
+
+        if (questCanvasGroup != null && !questUIShown)
+        {
+            questCanvasGroup.gameObject.SetActive(true);
+            questCanvasGroup.interactable = true;
+            questCanvasGroup.blocksRaycasts = true;
+
+            yield return StartCoroutine(FadeQuestCanvas(1f));
+            questCanvasGroup.alpha = 1f;
+
+            questUIShown = true;
+        }
+
+        if (QuestManager.Instance != null)
+        {
+            if (!QuestManager.Instance.QuestStarted)
+                QuestManager.Instance.BeginQuest();
+            else
+                QuestManager.Instance.ShowCurrentObjective();
+        }
     }
 
     IEnumerator FadeQuestCanvas(float target)

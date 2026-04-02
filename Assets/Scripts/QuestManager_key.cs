@@ -118,7 +118,6 @@ public class QuestManager : MonoBehaviour
     void CheckObjective()
     {
         Objective obj = CurrentObjective;
-
         bool completed = false;
 
         switch (obj.type)
@@ -132,6 +131,7 @@ public class QuestManager : MonoBehaviour
                 break;
 
             case ObjectiveType.ReachLocation:
+            case ObjectiveType.Sleep:        // ← add this line
                 return;
         }
 
@@ -151,6 +151,11 @@ public class QuestManager : MonoBehaviour
     public void TriggerReached()
     {
         if (questFinished || completingObjective) return;
+
+        // Only allow event-driven completion for these types
+        Objective obj = CurrentObjective;
+        if (obj.type != ObjectiveType.ReachLocation && obj.type != ObjectiveType.Sleep)
+            return;
 
         AdvanceStep();
     }
@@ -186,17 +191,21 @@ public class QuestManager : MonoBehaviour
     {
         QuestUI.Instance.PlayObjectiveComplete();
 
+        yield return null;
         while (QuestUI.Instance.IsAnimating) yield return null;
 
         StoryProgress.Instance.AddPointsSmooth(points);
 
-        // Show completion dialogue after objective completes
         Objective justCompleted = objectives[currentObjectiveIndex];
-
-        // PLAYER completion dialogue
         yield return StartCoroutine(PlayDialogueSequence(justCompleted.completionSequence));
 
-       
+        if (justCompleted.cutscene != null)
+        {
+            bool done = false;
+            justCompleted.cutscene.onCutsceneFinished = () => done = true;
+            justCompleted.cutscene.Play();
+            while (!done) yield return null;
+        }
 
         currentObjectiveIndex++;
 
@@ -304,6 +313,9 @@ public class Objective
 
     public int pointsReward;
 
+    [Header("Cutscene (Optional)")]
+    public CutsceneScript cutscene;
+
     [Header("START DIALOGUE")]
     public DialogueEntry[] startSequence;
 
@@ -315,7 +327,8 @@ public enum ObjectiveType
 {
     CollectKey,
     OpenDoor,
-    ReachLocation
+    ReachLocation,
+    Sleep          
 }
 
 public enum SpeakerType
