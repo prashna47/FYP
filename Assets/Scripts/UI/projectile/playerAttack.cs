@@ -12,15 +12,14 @@ public class PlayerAttack : MonoBehaviour
 
     void Update()
     {
-        if (!canAttack) return; // ❌ block attack outside zone
-
+        if (!canAttack) return;
+        if (InteractionLock.DialoguePlaying) return; // <-- ADD THIS
         if (Input.GetMouseButtonDown(0) && Time.time > nextFireTime)
         {
             nextFireTime = Time.time + fireRate;
             Shoot();
         }
     }
-
     void Shoot()
     {
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);

@@ -3,46 +3,36 @@
 public class OrbProjectile : MonoBehaviour
 {
     public float speed = 12f;
-    public float lifetime = 5f;
+    public float maxDistance = 20f; // destroy after travelling this far
 
     [Header("Impact")]
     public GameObject impactEffect;
 
-    private Vector3 targetPosition;
-    private bool hasTarget = false;
+    private Vector3 startPosition;
+    private Vector3 moveDirection;
 
     public void SetTarget(Vector3 target)
     {
-        // Lock the height so the projectile never goes up/down
         target.y = transform.position.y;
 
-        targetPosition = target;
-        hasTarget = true;
-
-        Vector3 direction = targetPosition - transform.position;
-
+        Vector3 direction = target - transform.position;
         if (direction != Vector3.zero)
         {
-            transform.forward = direction.normalized;
+            moveDirection = direction.normalized;
+            transform.forward = moveDirection;
         }
     }
 
     void Start()
     {
-        Destroy(gameObject, lifetime);
+        startPosition = transform.position;
     }
 
     void Update()
     {
-        if (!hasTarget) return;
+        transform.position += moveDirection * speed * Time.deltaTime;
 
-        transform.position = Vector3.MoveTowards(
-            transform.position,
-            targetPosition,
-            speed * Time.deltaTime
-        );
-
-        if (Vector3.Distance(transform.position, targetPosition) < 0.1f)
+        if (Vector3.Distance(transform.position, startPosition) >= maxDistance)
         {
             Impact();
         }
@@ -50,13 +40,12 @@ public class OrbProjectile : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Player"))
-            return;
+        if (collision.gameObject.CompareTag("Player")) return;
 
         Enemy enemy = collision.gameObject.GetComponent<Enemy>();
         if (enemy != null)
         {
-            enemy.TakeDamage(1); // 🔥 damage amount
+            enemy.TakeDamage(1);
         }
 
         Impact();

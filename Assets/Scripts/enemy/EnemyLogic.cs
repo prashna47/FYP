@@ -21,7 +21,7 @@ public class Enemy : MonoBehaviour
     public int attackDamage = 1;
     public float jumpHeight = 3f;
     public float jumpDuration = 0.6f;
-    public float postAttackWanderTime = 3f;   // how long it wanders before attacking again
+    public float postAttackWanderTime = 3f;
 
     [Header("Death")]
     public float destroyDelay = 2f;
@@ -33,14 +33,14 @@ public class Enemy : MonoBehaviour
 
     private bool isDead = false;
     private bool isAttacking = false;
-    private bool isPostAttackWander = false;   // currently in forced wander window
+    private bool isPostAttackWander = false;
 
     private Vector3 spawnPosition;
     private Vector3 targetPosition;
     private float waitTimer;
 
     private float cooldownTimer = 0f;
-    private float postAttackWanderTimer = 0f;  // counts up during forced wander
+    private float postAttackWanderTimer = 0f;
     private float jumpTimer = 0f;
     private Vector3 jumpStartPos;
     private Vector3 jumpEndPos;
@@ -81,7 +81,6 @@ public class Enemy : MonoBehaviour
             return;
         }
 
-        // ── post-attack wander window ─────────────────────────────
         if (isPostAttackWander)
         {
             postAttackWanderTimer += Time.deltaTime;
@@ -90,12 +89,10 @@ public class Enemy : MonoBehaviour
                 isPostAttackWander = false;
                 postAttackWanderTimer = 0f;
             }
-            // just wander — skip the attack check below
             DoWander();
             return;
         }
 
-        // ── check whether to attack ───────────────────────────────
         if (player != null && cooldownTimer <= 0f)
         {
             float distToPlayer = Vector3.Distance(transform.position, player.position);
@@ -109,7 +106,6 @@ public class Enemy : MonoBehaviour
         DoWander();
     }
 
-    // ── pulled wander logic into its own method so both paths can call it ──
     void DoWander()
     {
         float dist = Vector3.Distance(transform.position, targetPosition);
@@ -118,7 +114,6 @@ public class Enemy : MonoBehaviour
             transform.position = Vector3.MoveTowards(
                 transform.position, targetPosition, moveSpeed * Time.deltaTime);
 
-            // flip sprite to face movement direction — no rotation, just scale X
             float dir = targetPosition.x - transform.position.x;
             if (Mathf.Abs(dir) > 0.01f)
             {
@@ -143,7 +138,6 @@ public class Enemy : MonoBehaviour
         jumpEndPos = player.position;
         jumpEndPos.y = transform.position.y;
 
-        // flip to face player — no rotation
         float dir = jumpEndPos.x - transform.position.x;
         if (Mathf.Abs(dir) > 0.01f)
         {
@@ -170,10 +164,11 @@ public class Enemy : MonoBehaviour
         else if (t < 0.90f) animator.SetTrigger(HashJumpDown);
         else animator.SetTrigger(HashJumpLand);
 
+        // guaranteed damage at landing — no distance check
         if (t >= 0.90f && !damageDealt)
         {
             damageDealt = true;
-            TryDealDamage();
+            DealDamageGuaranteed();
         }
 
         if (t >= 1f)
@@ -181,32 +176,17 @@ public class Enemy : MonoBehaviour
             transform.position = jumpEndPos;
             isAttacking = false;
             cooldownTimer = attackCooldown;
-
-            // start the forced wander window instead of immediately re-attacking
             isPostAttackWander = true;
             postAttackWanderTimer = 0f;
             SetNewTarget();
         }
     }
 
-    void TryDealDamage()
+    void DealDamageGuaranteed()
     {
         if (player == null) return;
-        float dist = Vector3.Distance(transform.position, player.position);
-        if (dist <= attackRange * 0.5f)
-        {
-            PlayerHealth ph = player.GetComponent<PlayerHealth>();
-            if (ph != null) ph.TakeDamage(attackDamage);
-        }
-    }
-
-    void OnTriggerEnter(Collider other)
-    {
-        if (!isAttacking || damageDealt) return;
-        if (!other.CompareTag("Player")) return;
-        damageDealt = true;
-        PlayerHealth ph = other.GetComponent<PlayerHealth>();
-        if (ph != null) ph.TakeDamage(attackDamage);
+        PlayerHealth ph = player.GetComponent<PlayerHealth>();
+        if (ph != null) ph.TakeDamage(attackDamage, transform.position);
     }
 
     void SetNewTarget()
