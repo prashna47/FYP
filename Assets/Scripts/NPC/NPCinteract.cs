@@ -103,6 +103,7 @@ public class NPCDialogueTypewriterFade : MonoBehaviour
 
         return Input.GetKeyDown(KeyCode.Return)      // main Enter
             || Input.GetKeyDown(KeyCode.KeypadEnter) // numpad Enter
+            || Input.GetKeyDown(KeyCode.Space)
             || Input.GetMouseButtonDown(0);          // left click
     }
 
@@ -113,6 +114,7 @@ public class NPCDialogueTypewriterFade : MonoBehaviour
         bool stillHeld =
             Input.GetKey(KeyCode.Return) ||
             Input.GetKey(KeyCode.KeypadEnter) ||
+             Input.GetKey(KeyCode.Space) ||
             Input.GetMouseButton(0);
 
         if (!stillHeld)

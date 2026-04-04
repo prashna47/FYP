@@ -240,8 +240,10 @@ public class ObjectiveDialogueUI : MonoBehaviour
     {
         if (advanceLock) return false;
 
-        return Input.GetKeyDown(KeyCode.Return)
+        return Input.GetKey(KeyCode.Space) 
+            || Input.GetKeyDown(KeyCode.Return)
             || Input.GetKeyDown(KeyCode.KeypadEnter)
+
             || Input.GetMouseButtonDown(0);
     }
 
@@ -250,6 +252,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
         if (!advanceLock) return;
 
         bool stillHeld =
+             Input.GetKey(KeyCode.Space) ||
             Input.GetKey(KeyCode.Return) ||
             Input.GetKey(KeyCode.KeypadEnter) ||
             Input.GetMouseButton(0);
