@@ -15,6 +15,10 @@ public class QuestManager : MonoBehaviour
     public CanvasGroup arrowGroup;
     public ScreenDirectionArrow arrow;
 
+    [Header("Multi Enemy Arrow")]
+    public GameObject enemyArrowPrefab; // prefab with MultiEnemyArrow + RectTransform arrow
+    public Canvas arrowCanvas;          // canvas to spawn arrows into
+
     [Header("Player")]
     public Transform player;
 
@@ -38,6 +42,8 @@ public class QuestManager : MonoBehaviour
 
     Coroutine arrowFadeRoutine;
     Coroutine completeRoutine;
+
+    List<MultiEnemyArrow> activeEnemyArrows = new List<MultiEnemyArrow>();
 
     Objective CurrentObjective => objectives[currentObjectiveIndex];
 
@@ -81,6 +87,15 @@ public class QuestManager : MonoBehaviour
 
     void StartObjective()
     {
+        while (currentObjectiveIndex < objectives.Length && objectives[currentObjectiveIndex].skipObjective)
+            currentObjectiveIndex++;
+
+        if (currentObjectiveIndex >= objectives.Length)
+        {
+            questFinished = true;
+            return;
+        }
+
         if (completeRoutine != null) StopCoroutine(completeRoutine);
         completeRoutine = StartCoroutine(StartObjectiveRoutine());
     }
@@ -89,14 +104,13 @@ public class QuestManager : MonoBehaviour
     {
         Objective obj = CurrentObjective;
 
-        // Hide any leftover quest UI before start dialogue
         QuestUI.Instance.HideImmediate();
 
-        // Show start dialogue before objective begins
         yield return StartCoroutine(PlayDialogueSequence(obj.startSequence));
 
         ResetTimer();
         DisableArrowHard();
+        ClearEnemyArrows();
 
         currentStepIndex = 0;
         UpdateArrowTarget();
@@ -106,13 +120,58 @@ public class QuestManager : MonoBehaviour
 
         UpdateInteractablesForObjective(currentObjectiveIndex);
     }
+
     void UpdateArrowTarget()
     {
         Objective obj = CurrentObjective;
+
+        // 🚨 IMPORTANT: disable single arrow when using multi arrows
+        if (obj.type == ObjectiveType.DefeatEnemy)
+        {
+            arrow.enabled = false;
+            arrowGroup.gameObject.SetActive(false);
+        }
+
+        // Multi-enemy logic
+        if (obj.type == ObjectiveType.DefeatEnemy && obj.targetEnemies != null && obj.targetEnemies.Length > 0)
+        {
+            SpawnEnemyArrows(obj.targetEnemies);
+            return;
+        }
+
+        // Single arrow logic
         if (obj.arrowTargets != null && obj.arrowTargets.Length > currentStepIndex)
             arrow.target = obj.arrowTargets[currentStepIndex];
         else
             arrow.target = obj.arrowTarget;
+    }
+    void SpawnEnemyArrows(Enemy[] enemies)
+    {
+        ClearEnemyArrows();
+
+        if (enemyArrowPrefab == null || arrowCanvas == null) return;
+
+        foreach (Enemy e in enemies)
+        {
+            if (e == null) continue;
+
+            GameObject go = Instantiate(enemyArrowPrefab, arrowCanvas.transform);
+            MultiEnemyArrow mea = go.GetComponent<MultiEnemyArrow>();
+            if (mea != null)
+            {
+                mea.SetTarget(e);
+                activeEnemyArrows.Add(mea);
+            }
+        }
+    }
+
+    void ClearEnemyArrows()
+    {
+        foreach (var a in activeEnemyArrows)
+        {
+            if (a != null) Destroy(a.gameObject);
+        }
+        activeEnemyArrows.Clear();
     }
 
     void CheckObjective()
@@ -130,8 +189,13 @@ public class QuestManager : MonoBehaviour
                 if (obj.door != null) completed = obj.door.IsOpen;
                 break;
 
+            case ObjectiveType.DefeatEnemy:
+                // Complete when ALL enemies are dead (null)
+                completed = AllEnemiesDead(obj.targetEnemies);
+                break;
+
             case ObjectiveType.ReachLocation:
-            case ObjectiveType.Sleep:        // ← add this line
+            case ObjectiveType.Sleep:
                 return;
         }
 
@@ -140,6 +204,17 @@ public class QuestManager : MonoBehaviour
             completingObjective = true;
             CompleteObjective(obj.pointsReward);
         }
+    }
+
+    bool AllEnemiesDead(Enemy[] enemies)
+    {
+        if (enemies == null || enemies.Length == 0) return false;
+
+        foreach (Enemy e in enemies)
+        {
+            if (e != null) return false; // still alive
+        }
+        return true;
     }
 
     public bool IsCorrectTrigger(int objectiveIndex, int stepIndex)
@@ -152,7 +227,6 @@ public class QuestManager : MonoBehaviour
     {
         if (questFinished || completingObjective) return;
 
-        // Only allow event-driven completion for these types
         Objective obj = CurrentObjective;
         if (obj.type != ObjectiveType.ReachLocation && obj.type != ObjectiveType.Sleep)
             return;
@@ -182,6 +256,7 @@ public class QuestManager : MonoBehaviour
     void CompleteObjective(int points)
     {
         DisableArrowHard();
+        ClearEnemyArrows();
 
         if (completeRoutine != null) StopCoroutine(completeRoutine);
         completeRoutine = StartCoroutine(CompleteAndAdvance(points));
@@ -218,16 +293,6 @@ public class QuestManager : MonoBehaviour
         StartObjective();
     }
 
-    void ShowArrow()
-    {
-        hintShown = true;
-        arrow.enabled = true;
-        arrowGroup.gameObject.SetActive(true);
-
-        if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
-        arrowFadeRoutine = StartCoroutine(FadeArrow(1f));
-    }
-
     IEnumerator PlayDialogueSequence(DialogueEntry[] sequence)
     {
         if (sequence == null || sequence.Length == 0)
@@ -239,33 +304,36 @@ public class QuestManager : MonoBehaviour
                 continue;
 
             if (entry.speaker == SpeakerType.Player)
-            {
-                ObjectiveDialogueUI.Instance.ShowDialogue(
-                    entry.lines,
-                    true
-                );
-            }
+                ObjectiveDialogueUI.Instance.ShowDialogue(entry.lines, true);
             else
-            {
-                ObjectiveDialogueUI.Instance.ShowDialogue(
-                   entry.lines,
-                   false,
-                   entry.npcPortrait,
-                   entry.npcName
-               );
-            }
+                ObjectiveDialogueUI.Instance.ShowDialogue(entry.lines, false, entry.npcPortrait, entry.npcName);
 
             while (!ObjectiveDialogueUI.Instance.IsFinished)
                 yield return null;
         }
     }
 
+    void ShowArrow()
+    {
+        hintShown = true;
+
+        // 🚨 ONLY show single arrow if NOT enemy objective
+        if (CurrentObjective.type != ObjectiveType.DefeatEnemy)
+        {
+            arrow.enabled = true;
+            arrowGroup.gameObject.SetActive(true);
+
+            if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
+            arrowFadeRoutine = StartCoroutine(FadeArrow(1f));
+        }
+    }
     void DisableArrowHard()
     {
         hintShown = false;
 
         if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
 
+        // Disable single arrow
         if (arrow) arrow.enabled = false;
 
         if (arrowGroup)
@@ -273,8 +341,10 @@ public class QuestManager : MonoBehaviour
             arrowGroup.alpha = 0f;
             arrowGroup.gameObject.SetActive(false);
         }
-    }
 
+        // 🚨 ALSO clear multi-enemy arrows
+        ClearEnemyArrows();
+    }
     IEnumerator FadeArrow(float targetAlpha)
     {
         while (!Mathf.Approximately(arrowGroup.alpha, targetAlpha))
@@ -297,19 +367,23 @@ public class QuestManager : MonoBehaviour
     }
 }
 
-
-
 [System.Serializable]
 public class Objective
 {
     public string objectiveName;
     public ObjectiveType type;
 
+    [Tooltip("Tick to skip this objective entirely")]
+    public bool skipObjective;
+
     public Transform arrowTarget;
     public Transform[] arrowTargets;
 
     public DoorInteractable door;
     public Transform[] triggerPoints;
+
+    [Tooltip("Drag all enemies here for DefeatEnemy objectives")]
+    public Enemy[] targetEnemies;      // <-- changed from single to array
 
     public int pointsReward;
 
@@ -328,7 +402,8 @@ public enum ObjectiveType
     CollectKey,
     OpenDoor,
     ReachLocation,
-    Sleep          
+    Sleep,
+    DefeatEnemy
 }
 
 public enum SpeakerType
@@ -349,4 +424,3 @@ public class DialogueEntry
     [TextArea(2, 4)]
     public string[] lines;
 }
-

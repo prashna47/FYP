@@ -123,7 +123,7 @@ public class NPCDialogueTypewriterFade : MonoBehaviour
 
 
 
-    void StartDialogue()
+   public void StartDialogue()
     {
         if (lines == null || lines.Length == 0) return;
 

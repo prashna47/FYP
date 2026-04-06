@@ -3,7 +3,7 @@
 public class OrbProjectile : MonoBehaviour
 {
     public float speed = 12f;
-    public float maxDistance = 20f; // destroy after travelling this far
+    public float maxDistance = 20f;
 
     [Header("Impact")]
     public GameObject impactEffect;
@@ -13,8 +13,7 @@ public class OrbProjectile : MonoBehaviour
 
     public void SetTarget(Vector3 target)
     {
-        target.y = transform.position.y;
-
+        // No Y lock — use the exact hit point
         Vector3 direction = target - transform.position;
         if (direction != Vector3.zero)
         {

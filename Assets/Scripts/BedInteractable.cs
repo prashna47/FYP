@@ -72,6 +72,12 @@ public class BedInteractable : MonoBehaviour, IInteractable
 
     IEnumerator SleepWithFade(PlayerProximityInteractor interactor)
     {
+        if (!interactionEnabled || interactor == null) yield break;
+
+        // 1️⃣ Immediately unregister to prevent repeated prompts
+        interactor.Unregister(this);
+        playerInside = null;
+
         // Fade out first
         if (fader != null)
             yield return fader.FadeOut();
@@ -91,22 +97,21 @@ public class BedInteractable : MonoBehaviour, IInteractable
 
         player.position = teleportPoint.position;
 
-        // ✅ Snap camera if using custom camera script
+        // Snap camera if using custom camera script
         var cam = FindObjectOfType<camera>();
         if (cam != null)
             cam.SnapToTarget();
 
-        // Wait a frame to let camera catch up
         yield return null;
         yield return new WaitForEndOfFrame();
 
         if (cc != null) cc.enabled = true;
 
-        // ✅ Fade back in
+        // Fade back in
         if (fader != null)
             yield return fader.FadeIn();
 
-        // ✅ Optional: trigger quest progression
+        // Trigger quest progression
         if (QuestManager.Instance != null)
             QuestManager.Instance.TriggerReached();
     }

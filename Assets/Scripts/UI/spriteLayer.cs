@@ -1,12 +1,9 @@
 using UnityEngine;
 
 [RequireComponent(typeof(SpriteRenderer))]
-public class YSortSprite : MonoBehaviour
+public class SpriteYSorter : MonoBehaviour
 {
-    public int sortingOffset = 0;
-    public float precision = 100f;
-
-    SpriteRenderer sr;
+    private SpriteRenderer sr;
 
     void Awake()
     {
@@ -15,10 +12,7 @@ public class YSortSprite : MonoBehaviour
 
     void LateUpdate()
     {
-        // If your character moves up/down on Y:
-        sr.sortingOrder = sortingOffset + Mathf.RoundToInt(-transform.position.y * precision);
-
-        // If instead your movement uses Z, comment the line above and use:
-        // sr.sortingOrder = sortingOffset + Mathf.RoundToInt(-transform.position.z * precision);
+        // Lower Y = closer to camera = render in front
+        sr.sortingOrder = Mathf.RoundToInt(-transform.position.y * 100);
     }
 }
