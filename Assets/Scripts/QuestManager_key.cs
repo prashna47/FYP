@@ -271,9 +271,13 @@ public class QuestManager : MonoBehaviour
 
         StoryProgress.Instance.AddPointsSmooth(points);
 
+        // Get completed objective
         Objective justCompleted = objectives[currentObjectiveIndex];
+
+        // ✅ PLAY COMPLETION DIALOGUE FIRST
         yield return StartCoroutine(PlayDialogueSequence(justCompleted.completionSequence));
 
+        // ✅ CUTSCENE (if any)
         if (justCompleted.cutscene != null)
         {
             bool done = false;
@@ -282,6 +286,14 @@ public class QuestManager : MonoBehaviour
             while (!done) yield return null;
         }
 
+        // ✅ NOW notify NPC AFTER dialogue/cutscene
+        NPCQuestController npc = FindObjectOfType<NPCQuestController>();
+        if (npc != null)
+        {
+            npc.OnObjectiveCompleted(currentObjectiveIndex);
+        }
+
+        // Move to next objective
         currentObjectiveIndex++;
 
         if (currentObjectiveIndex >= objectives.Length)
@@ -292,6 +304,7 @@ public class QuestManager : MonoBehaviour
 
         StartObjective();
     }
+
 
     IEnumerator PlayDialogueSequence(DialogueEntry[] sequence)
     {

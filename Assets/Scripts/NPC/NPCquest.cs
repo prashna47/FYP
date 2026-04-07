@@ -1,113 +1,100 @@
-using UnityEngine;
-using UnityEngine.AI;
+﻿using UnityEngine;
 
 public class NPCQuestController : MonoBehaviour
 {
-    [Header("NPC Movement")]
-    public Transform walkTarget;          // Where NPC should walk
-    public float walkSpeed = 3.5f;
+    [Header("Movement")]
+    public float moveSpeed = 3f;
+    public float stopDistance = 1.5f;
 
-    [Header("Quest Trigger")]
-    public int triggerObjectiveIndex = 0; // Objective index after which NPC starts walking
-    public int talkObjectiveIndex = 1;    // Objective index for talking to NPC
+    [Header("Quest Settings")]
+    public int walkAfterObjectiveIndex = 2; // after this objective, NPC starts walking
+    public int talkObjectiveIndex = 3;      // this objective is auto-completed when NPC arrives
 
-    [Header("Player Interaction")]
-    public string playerTag = "Player";
-    public KeyCode interactKey = KeyCode.E;
+    [Header("Interaction")]
     public CanvasGroup interactPromptGroup;
+    public string playerTag = "Player";
 
-    [Header("Dialogue")]
-    public NPCDialogueTypewriterFade dialogueScript;
+    private Transform player;
+    private bool isWalking = false;
+    private bool hasArrived = false;
+    private bool talkObjectiveCompleted = false;
 
-    private NavMeshAgent agent;
-    private bool walkingTriggered = false;
-    private bool playerInRange = false;
+    private Quaternion fixedRotation; // store initial rotation
 
-    void Awake()
+    void Start()
     {
-        agent = GetComponent<NavMeshAgent>();
-        agent.speed = walkSpeed;
-        agent.enabled = false; // Start disabled
+        // Store the NPC's initial rotation
+        fixedRotation = transform.rotation;
+
+        if (interactPromptGroup != null)
+            interactPromptGroup.alpha = 0f;
+
+        GameObject p = GameObject.FindGameObjectWithTag(playerTag);
+        if (p != null)
+            player = p.transform;
     }
 
     void Update()
     {
-        HandleWalkTrigger();
-        HandlePlayerInteraction();
+        HandleMovement();
     }
 
-    void HandleWalkTrigger()
-    {
-        if (walkingTriggered) return;
+    // ---------------- CALLED FROM QUEST MANAGER ----------------
 
-        // Start walking after the specified objective is complete
-        if (QuestManager.Instance.CurrentObjectiveIndex > triggerObjectiveIndex)
+    public void OnObjectiveCompleted(int completedIndex)
+    {
+        if (completedIndex == walkAfterObjectiveIndex)
         {
-            walkingTriggered = true;
-            StartWalking();
+            StartCoroutine(StartWalk());
         }
     }
 
-    void StartWalking()
+    System.Collections.IEnumerator StartWalk()
     {
-        if (walkTarget == null) return;
-
-        agent.enabled = true;
-        agent.SetDestination(walkTarget.position);
+        yield return new WaitForSeconds(0.2f); // small delay after dialogue
+        isWalking = true;
+        hasArrived = false;
     }
 
-    void HandlePlayerInteraction()
+    // ---------------- MOVE TO PLAYER ----------------
+
+    void HandleMovement()
     {
-        if (!playerInRange) return;
+        if (!isWalking || hasArrived || player == null) return;
 
-        // Only allow interaction when current objective is the talk-to-NPC objective
-        if (QuestManager.Instance.CurrentObjectiveIndex != talkObjectiveIndex) return;
+        Vector3 direction = (player.position - transform.position);
+        float distance = direction.magnitude;
 
-        if (Input.GetKeyDown(interactKey))
+        if (distance > stopDistance)
         {
-            // Trigger dialogue
-            if (dialogueScript != null)
-                dialogueScript.StartDialogue();
+            transform.position += direction.normalized * moveSpeed * Time.deltaTime;
 
-            // Mark objective as complete
-            QuestManager.Instance.TriggerReached();
+            // Keep fixed rotation
+            transform.rotation = fixedRotation;
+        }
+        else
+        {
+            // NPC reached player
+            isWalking = false;
+            hasArrived = true;
+
+            // Auto-complete talk objective
+            CompleteTalkObjective();
         }
     }
 
-    void OnTriggerEnter(Collider other)
+    void CompleteTalkObjective()
     {
-        if (!other.CompareTag(playerTag)) return;
-
-        playerInRange = true;
+        if (talkObjectiveCompleted) return;
+        talkObjectiveCompleted = true;
 
         if (QuestManager.Instance.CurrentObjectiveIndex == talkObjectiveIndex)
         {
-            // Show prompt
+            QuestManager.Instance.TriggerReached();
+
+            // Hide prompt if any
             if (interactPromptGroup != null)
-                interactPromptGroup.alpha = 1f;
-        }
-    }
-
-    void OnTriggerExit(Collider other)
-    {
-        if (!other.CompareTag(playerTag)) return;
-
-        playerInRange = false;
-
-        // Hide prompt
-        if (interactPromptGroup != null)
-            interactPromptGroup.alpha = 0f;
-    }
-
-    void FixedUpdate()
-    {
-        // Stop NavMeshAgent when close to target
-        if (agent.enabled && !agent.pathPending)
-        {
-            if (agent.remainingDistance <= agent.stoppingDistance)
-            {
-                agent.enabled = false;
-            }
+                interactPromptGroup.alpha = 0f;
         }
     }
 }

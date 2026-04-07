@@ -7,7 +7,7 @@ public class AttackTutorialManager : MonoBehaviour
     public int unlockAtObjectiveIndex = 2;
 
     [Header("References")]
-    public PlayerAttack playerAttack;     // 👈 drag your PlayerAttack here
+    PlayerAttack playerAttack;   // now auto-fetched
     public CanvasGroup tutorialUI;
 
     [Header("Animation Settings")]
@@ -21,6 +21,18 @@ public class AttackTutorialManager : MonoBehaviour
 
     void Start()
     {
+        // 🔍 Find player by tag
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+
+        if (player != null)
+        {
+            playerAttack = player.GetComponent<PlayerAttack>();
+        }
+        else
+        {
+            Debug.LogWarning("No GameObject with tag 'Player' found!");
+        }
+
         // Lock attack at start
         if (playerAttack != null)
             playerAttack.canAttack = false;
@@ -73,7 +85,6 @@ public class AttackTutorialManager : MonoBehaviour
         tutorialUI.gameObject.SetActive(true);
         tutorialUI.alpha = 0f;
 
-        // 🌟 Fade IN
         while (tutorialUI.alpha < 1f)
         {
             tutorialUI.alpha += Time.deltaTime * fadeInSpeed;
@@ -94,7 +105,6 @@ public class AttackTutorialManager : MonoBehaviour
     {
         tutorialActive = false;
 
-        // 🌙 Fade OUT smoothly
         while (tutorialUI.alpha > 0f)
         {
             tutorialUI.alpha -= Time.deltaTime * fadeOutSpeed;
