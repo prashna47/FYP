@@ -9,6 +9,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
     [Header("UI")]
     public CanvasGroup dialogBoxGroup;
     public TMP_Text dialogText;
+    public float nextAllowedClickTime = 0f;
 
     [Header("Name UI")]
     public TMP_Text nameText;
@@ -63,18 +64,21 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         UpdateAdvanceLock();
 
-        if (Time.time - lineStartTime < minSkipDelay) return;
+        // ❌ HARD COOLDOWN (prevents spam completely)
+        if (Time.time < nextAllowedClickTime) return;
 
         if (!AdvancePressed()) return;
 
         advanceLock = true;
+
+        // Set next allowed click time (Genshin-style delay)
+        nextAllowedClickTime = Time.time + minSkipDelay;
 
         if (isTyping)
             FinishCurrentLineInstant();
         else
             NextLine();
     }
-
     public void ShowDialogue(string[] lines, bool isPlayer, Sprite npcPortrait = null, string npcName = "")
     {
         if (lines == null || lines.Length == 0) return;
@@ -158,9 +162,12 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
     void NextLine()
     {
+        if (currentLines == null) return;
+
         lineIndex++;
 
-        if (currentLines == null || lineIndex >= currentLines.Length)
+        // 🛑 HARD SAFETY CHECK
+        if (lineIndex < 0 || lineIndex >= currentLines.Length)
         {
             EndDialogue();
             return;
@@ -168,7 +175,6 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         StartTypingLine(currentLines[lineIndex]);
     }
-
     void EndDialogue()
     {
         dialogOpen = false;
@@ -193,7 +199,6 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         IsFinished = true;
     }
-
     void StartTypingLine(string line)
     {
         if (!dialogText) return;
@@ -203,6 +208,10 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         currentLineFull = line ?? "";
         lineStartTime = Time.time;
+
+        // 🔥 LOCK input briefly when new line starts
+        nextAllowedClickTime = Time.time + minSkipDelay;
+
         advanceLock = true;
 
         typingRoutine = StartCoroutine(TypeLine(currentLineFull));

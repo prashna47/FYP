@@ -6,6 +6,9 @@ public class NPCQuestController : MonoBehaviour
     public float moveSpeed = 3f;
     public float stopDistance = 1.5f;
 
+    [Header("Animation")]
+    public Animator animator;
+
     [Header("Quest Settings")]
     public int walkAfterObjectiveIndex = 2; // after this objective, NPC starts walking
     public int talkObjectiveIndex = 3;      // this objective is auto-completed when NPC arrives
@@ -60,26 +63,56 @@ public class NPCQuestController : MonoBehaviour
 
     void HandleMovement()
     {
-        if (!isWalking || hasArrived || player == null) return;
+        if (!isWalking || hasArrived || player == null)
+        {
+            // Stop animation
+            if (animator != null)
+            {
+                animator.SetFloat("Speed", 0f);
+            }
+            return;
+        }
 
         Vector3 direction = (player.position - transform.position);
         float distance = direction.magnitude;
 
         if (distance > stopDistance)
         {
-            transform.position += direction.normalized * moveSpeed * Time.deltaTime;
+            Vector3 moveDir = direction.normalized;
 
-            // Keep fixed rotation
+            // Move in 3D (X, Z)
+            transform.position += moveDir * moveSpeed * Time.deltaTime;
+
+            // Lock rotation (important for 2D sprite)
             transform.rotation = fixedRotation;
+
+            // 🎯 ANIMATION (convert 3D → 2D)
+            if (animator != null)
+            {
+                animator.SetFloat("MoveX", moveDir.x);
+                animator.SetFloat("MoveY", moveDir.z); // Z becomes Y
+                animator.SetFloat("Speed", moveDir.magnitude);
+            }
         }
         else
         {
-            // NPC reached player
             isWalking = false;
             hasArrived = true;
 
-            // Auto-complete talk objective
+            // Stop animation
+            if (animator != null)
+            {
+                animator.SetFloat("Speed", 0f);
+            }
+
             CompleteTalkObjective();
+        }
+
+        if (hasArrived && player != null && animator != null)
+        {
+            Vector3 lookDir = (player.position - transform.position).normalized;
+            animator.SetFloat("MoveX", lookDir.x);
+            animator.SetFloat("MoveY", lookDir.z);
         }
     }
 
