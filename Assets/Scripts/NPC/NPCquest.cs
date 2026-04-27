@@ -10,8 +10,8 @@ public class NPCQuestController : MonoBehaviour
     public Animator animator;
 
     [Header("Quest Settings")]
-    public int walkAfterObjectiveIndex = 2; // after this objective, NPC starts walking
-    public int talkObjectiveIndex = 3;      // this objective is auto-completed when NPC arrives
+    public int walkAfterObjectiveIndex = 2;
+    public int talkObjectiveIndex = 3;
 
     [Header("Interaction")]
     public CanvasGroup interactPromptGroup;
@@ -21,12 +21,15 @@ public class NPCQuestController : MonoBehaviour
     private bool isWalking = false;
     private bool hasArrived = false;
     private bool talkObjectiveCompleted = false;
+    private Quaternion fixedRotation;
 
-    private Quaternion fixedRotation; // store initial rotation
+    // ✅ Reference to the player's movement script — assign in Inspector
+    // Replace "PlayerMovement" with whatever your actual movement script is called
+    [Header("Player Control")]
+    public MonoBehaviour playerMovementScript;
 
     void Start()
     {
-        // Store the NPC's initial rotation
         fixedRotation = transform.rotation;
 
         if (interactPromptGroup != null)
@@ -34,15 +37,23 @@ public class NPCQuestController : MonoBehaviour
 
         GameObject p = GameObject.FindGameObjectWithTag(playerTag);
         if (p != null)
+        {
             player = p.transform;
+
+            // ✅ Auto-find the movement script if not assigned in Inspector
+            if (playerMovementScript == null)
+                playerMovementScript = p.GetComponent<MonoBehaviour>();
+        }
     }
 
     void Update()
     {
+        
+        if (GameState.IsPaused || GameState.IsPlayerFrozen) return;
+        // rest of movement + sprite flip logic
+       
         HandleMovement();
     }
-
-    // ---------------- CALLED FROM QUEST MANAGER ----------------
 
     public void OnObjectiveCompleted(int completedIndex)
     {
@@ -54,22 +65,20 @@ public class NPCQuestController : MonoBehaviour
 
     System.Collections.IEnumerator StartWalk()
     {
-        yield return new WaitForSeconds(0.2f); // small delay after dialogue
+        yield return new WaitForSeconds(0.2f);
         isWalking = true;
         hasArrived = false;
-    }
 
-    // ---------------- MOVE TO PLAYER ----------------
+        // ✅ Freeze the player as NPC begins walking
+        SetPlayerFrozen(true);
+    }
 
     void HandleMovement()
     {
         if (!isWalking || hasArrived || player == null)
         {
-            // Stop animation
             if (animator != null)
-            {
                 animator.SetFloat("Speed", 0f);
-            }
             return;
         }
 
@@ -79,18 +88,13 @@ public class NPCQuestController : MonoBehaviour
         if (distance > stopDistance)
         {
             Vector3 moveDir = direction.normalized;
-
-            // Move in 3D (X, Z)
             transform.position += moveDir * moveSpeed * Time.deltaTime;
-
-            // Lock rotation (important for 2D sprite)
             transform.rotation = fixedRotation;
 
-            // 🎯 ANIMATION (convert 3D → 2D)
             if (animator != null)
             {
                 animator.SetFloat("MoveX", moveDir.x);
-                animator.SetFloat("MoveY", moveDir.z); // Z becomes Y
+                animator.SetFloat("MoveY", moveDir.z);
                 animator.SetFloat("Speed", moveDir.magnitude);
             }
         }
@@ -99,11 +103,11 @@ public class NPCQuestController : MonoBehaviour
             isWalking = false;
             hasArrived = true;
 
-            // Stop animation
             if (animator != null)
-            {
                 animator.SetFloat("Speed", 0f);
-            }
+
+            // ✅ NPC has arrived — unfreeze the player
+            SetPlayerFrozen(false);
 
             CompleteTalkObjective();
         }
@@ -125,9 +129,20 @@ public class NPCQuestController : MonoBehaviour
         {
             QuestManager.Instance.TriggerReached();
 
-            // Hide prompt if any
             if (interactPromptGroup != null)
                 interactPromptGroup.alpha = 0f;
         }
+    }
+
+    // ✅ Freeze/unfreeze the player
+    private void SetPlayerFrozen(bool frozen)
+    {
+        // Option A — disable/enable the movement script component entirely
+        if (playerMovementScript != null)
+            playerMovementScript.enabled = !frozen;
+
+        // Option B — use GameState so your player script can check it
+        // (use this if your player already checks GameState.IsPaused)
+        // GameState.IsPlayerFrozen = frozen;
     }
 }

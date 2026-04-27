@@ -94,12 +94,12 @@ public class CharacterSelectionUI : MonoBehaviour
         if (fader != null)
         {
             yield return fader.FadeOut();
-            SceneManager.LoadScene("SampleScene");
+            SceneManager.LoadScene("world");
         }
         else
         {
             // Fallback if no fader exists
-            SceneManager.LoadScene("SampleScene");
+            SceneManager.LoadScene("world");
         }
     }
 }

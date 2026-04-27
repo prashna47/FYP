@@ -32,6 +32,7 @@ public class Player3DMovement : MonoBehaviour
 
     void Update()
     {
+        if (GameState.IsPaused) return;
         if (PlayerControlLock.MovementLocked)
             return;
 

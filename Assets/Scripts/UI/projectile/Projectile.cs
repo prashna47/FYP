@@ -29,6 +29,7 @@ public class OrbProjectile : MonoBehaviour
 
     void Update()
     {
+        if (GameState.IsPaused) return;
         transform.position += moveDirection * speed * Time.deltaTime;
 
         if (Vector3.Distance(transform.position, startPosition) >= maxDistance)

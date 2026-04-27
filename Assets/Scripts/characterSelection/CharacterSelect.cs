@@ -7,12 +7,12 @@ public class CharacterSelect : MonoBehaviour
     public void SelectMale()
     {
         GameData.IsMale = true;
-        SceneManager.LoadScene("SampleScene");
+        SceneManager.LoadScene("world");
     }
 
     public void SelectFemale()
     {
         GameData.IsMale = false;
-        SceneManager.LoadScene("SampleScene");
+        SceneManager.LoadScene("world");
     }
 }
