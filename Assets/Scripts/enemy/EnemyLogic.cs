@@ -1,10 +1,21 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 
 public class Enemy : MonoBehaviour
 {
     [Header("Health")]
     public int maxHP = 5;
     private int currentHP;
+
+    [Header("Death Effects")]
+    public GameObject smokePrefab;
+    public float smokeDelay = 0.1f;
+    public float distortionDuration = 2f;
+
+    [TextArea]
+    public string[] corruptionLines;
 
     [Header("Health Bar")]
     public GameObject healthBarPrefab;
@@ -105,7 +116,32 @@ public class Enemy : MonoBehaviour
 
         DoWander();
     }
+    IEnumerator DeathSequence()
+    {
+        // small delay so animation starts first
+        yield return new WaitForSeconds(smokeDelay);
 
+        // 🌫 Spawn smoke
+        if (smokePrefab != null)
+        {
+            Instantiate(smokePrefab, transform.position, Quaternion.identity);
+        }
+
+        // 🎥 Trigger distortion
+        if (ScreenDistortionController.Instance != null)
+        {
+            ScreenDistortionController.Instance.TriggerDistortion(distortionDuration);
+        }
+
+        // 🧠 Delay before dialogue (feels natural)
+        yield return new WaitForSeconds(0.5f);
+
+        // 🧠 Trigger corruption dialogue
+        if (ObjectiveDialogueUI.Instance != null && corruptionLines != null && corruptionLines.Length > 0)
+        {
+            ObjectiveDialogueUI.Instance.ShowDialogue(corruptionLines, true);
+        }
+    }
     void DoWander()
     {
         float dist = Vector3.Distance(transform.position, targetPosition);
@@ -206,12 +242,19 @@ public class Enemy : MonoBehaviour
 
     void Die()
     {
+        if (isDead) return;
         isDead = true;
+
         if (animator != null) animator.SetTrigger(HashDie);
         if (col != null) col.enabled = false;
         if (healthBar != null) healthBar.PlayDeathAnimation();
+
+        StartCoroutine(DeathSequence());
+
         Destroy(gameObject, destroyDelay);
     }
+
+
 
     void SpawnHealthBar()
     {
@@ -231,4 +274,7 @@ public class Enemy : MonoBehaviour
         Gizmos.DrawWireSphere(
             Application.isPlaying ? spawnPosition : transform.position, wanderRadius);
     }
+
+
 }
+

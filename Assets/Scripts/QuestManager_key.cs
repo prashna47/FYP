@@ -9,6 +9,8 @@ public class QuestManager : MonoBehaviour
     [Header("Quest Settings")]
     public float hintDelay = 30f;
 
+
+
     public bool QuestStarted { get; private set; } = false;
 
     [Header("Arrow")]
@@ -316,10 +318,25 @@ public class QuestManager : MonoBehaviour
             if (entry == null || entry.lines == null || entry.lines.Length == 0)
                 continue;
 
+            // 🎥 Trigger distortion ONLY when flagged
+            if (entry.triggerDistortion && ScreenDistortionController.Instance != null)
+            {
+                ScreenDistortionController.Instance.TriggerDistortion();
+            }
+
             if (entry.speaker == SpeakerType.Player)
+            {
                 ObjectiveDialogueUI.Instance.ShowDialogue(entry.lines, true);
+            }
             else
-                ObjectiveDialogueUI.Instance.ShowDialogue(entry.lines, false, entry.npcPortrait, entry.npcName);
+            {
+                ObjectiveDialogueUI.Instance.ShowDialogue(
+                    entry.lines,
+                    false,
+                    entry.npcPortrait,
+                    entry.npcName
+                );
+            }
 
             while (!ObjectiveDialogueUI.Instance.IsFinished)
                 yield return null;
@@ -386,6 +403,7 @@ public class Objective
     public string objectiveName;
     public ObjectiveType type;
 
+
     [Tooltip("Tick to skip this objective entirely")]
     public bool skipObjective;
 
@@ -408,6 +426,7 @@ public class Objective
 
     [Header("COMPLETION DIALOGUE")]
     public DialogueEntry[] completionSequence;
+
 }
 
 public enum ObjectiveType
@@ -436,4 +455,5 @@ public class DialogueEntry
 
     [TextArea(2, 4)]
     public string[] lines;
+    public bool triggerDistortion;
 }

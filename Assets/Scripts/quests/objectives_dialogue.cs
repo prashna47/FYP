@@ -81,6 +81,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
     }
     public void ShowDialogue(string[] lines, bool isPlayer, Sprite npcPortrait = null, string npcName = "")
     {
+        StopAllCoroutines();
         if (lines == null || lines.Length == 0) return;
 
         if (typingRoutine != null)
@@ -157,6 +158,12 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         yield return new WaitForSeconds(fadeDuration);
 
+        if (currentLines == null || lineIndex < 0 || lineIndex >= currentLines.Length)
+        {
+            EndDialogue();
+            yield break;
+        }
+
         StartTypingLine(currentLines[lineIndex]);
     }
 
@@ -166,8 +173,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         lineIndex++;
 
-        // 🛑 HARD SAFETY CHECK
-        if (lineIndex < 0 || lineIndex >= currentLines.Length)
+        if (lineIndex >= currentLines.Length)
         {
             EndDialogue();
             return;
