@@ -7,7 +7,7 @@ public class AttackTutorialManager : MonoBehaviour
     public int unlockAtObjectiveIndex = 2;
 
     [Header("References")]
-    PlayerAttack playerAttack;   // now auto-fetched
+    PlayerAttack playerAttack;
     public CanvasGroup tutorialUI;
 
     [Header("Animation Settings")]
@@ -19,9 +19,12 @@ public class AttackTutorialManager : MonoBehaviour
     bool attackUnlocked = false;
     bool isFadingIn = false;
 
+    // ✅ NEW
+    bool canDismiss = false;
+    bool isFadingOut = false;
+
     void Start()
     {
-        // 🔍 Find player by tag
         GameObject player = GameObject.FindGameObjectWithTag("Player");
 
         if (player != null)
@@ -33,7 +36,6 @@ public class AttackTutorialManager : MonoBehaviour
             Debug.LogWarning("No GameObject with tag 'Player' found!");
         }
 
-        // Lock attack at start
         if (playerAttack != null)
             playerAttack.canAttack = false;
 
@@ -45,7 +47,6 @@ public class AttackTutorialManager : MonoBehaviour
     {
         if (QuestManager.Instance == null) return;
 
-        // 🔓 Unlock attack at objective
         if (!attackUnlocked &&
             QuestManager.Instance.CurrentObjectiveIndex >= unlockAtObjectiveIndex)
         {
@@ -54,14 +55,15 @@ public class AttackTutorialManager : MonoBehaviour
 
         if (!tutorialActive) return;
 
-        // 🎯 After fade-in → flicker
-        if (!isFadingIn)
+        if (!isFadingIn && !isFadingOut)
         {
             FlickerUI();
         }
 
-        // 🖱 Mouse OR 🎮 Controller input
-        if (Input.GetMouseButtonDown(0) || Input.GetButtonDown("Fire1"))
+        // ✅ ONLY allow click after fully shown
+        if (canDismiss &&
+            !isFadingOut &&
+            (Input.GetMouseButtonDown(0) || Input.GetButtonDown("Fire1")))
         {
             StartCoroutine(FadeOutAndDisable());
         }
@@ -81,6 +83,7 @@ public class AttackTutorialManager : MonoBehaviour
     {
         tutorialActive = true;
         isFadingIn = true;
+        canDismiss = false; // 🔒 LOCK INPUT
 
         tutorialUI.gameObject.SetActive(true);
         tutorialUI.alpha = 0f;
@@ -92,7 +95,9 @@ public class AttackTutorialManager : MonoBehaviour
         }
 
         tutorialUI.alpha = 1f;
+
         isFadingIn = false;
+        canDismiss = true; // 🔓 UNLOCK INPUT ONLY AFTER FULLY VISIBLE
     }
 
     void FlickerUI()
@@ -103,7 +108,9 @@ public class AttackTutorialManager : MonoBehaviour
 
     IEnumerator FadeOutAndDisable()
     {
+        isFadingOut = true;
         tutorialActive = false;
+        canDismiss = false; // 🔒 prevent spam
 
         while (tutorialUI.alpha > 0f)
         {
@@ -113,5 +120,7 @@ public class AttackTutorialManager : MonoBehaviour
 
         tutorialUI.alpha = 0f;
         tutorialUI.gameObject.SetActive(false);
+
+        isFadingOut = false;
     }
 }

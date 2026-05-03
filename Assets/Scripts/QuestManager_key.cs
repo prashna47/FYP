@@ -9,8 +9,6 @@ public class QuestManager : MonoBehaviour
     [Header("Quest Settings")]
     public float hintDelay = 30f;
 
-
-
     public bool QuestStarted { get; private set; } = false;
 
     [Header("Arrow")]
@@ -18,8 +16,8 @@ public class QuestManager : MonoBehaviour
     public ScreenDirectionArrow arrow;
 
     [Header("Multi Enemy Arrow")]
-    public GameObject enemyArrowPrefab; // prefab with MultiEnemyArrow + RectTransform arrow
-    public Canvas arrowCanvas;          // canvas to spawn arrows into
+    public GameObject enemyArrowPrefab;
+    public Canvas arrowCanvas;
 
     [Header("Player")]
     public Transform player;
@@ -127,26 +125,24 @@ public class QuestManager : MonoBehaviour
     {
         Objective obj = CurrentObjective;
 
-        // 🚨 IMPORTANT: disable single arrow when using multi arrows
         if (obj.type == ObjectiveType.DefeatEnemy)
         {
             arrow.enabled = false;
             arrowGroup.gameObject.SetActive(false);
         }
 
-        // Multi-enemy logic
         if (obj.type == ObjectiveType.DefeatEnemy && obj.targetEnemies != null && obj.targetEnemies.Length > 0)
         {
             SpawnEnemyArrows(obj.targetEnemies);
             return;
         }
 
-        // Single arrow logic
         if (obj.arrowTargets != null && obj.arrowTargets.Length > currentStepIndex)
             arrow.target = obj.arrowTargets[currentStepIndex];
         else
             arrow.target = obj.arrowTarget;
     }
+
     void SpawnEnemyArrows(Enemy[] enemies)
     {
         ClearEnemyArrows();
@@ -192,7 +188,6 @@ public class QuestManager : MonoBehaviour
                 break;
 
             case ObjectiveType.DefeatEnemy:
-                // Complete when ALL enemies are dead (null)
                 completed = AllEnemiesDead(obj.targetEnemies);
                 break;
 
@@ -214,7 +209,7 @@ public class QuestManager : MonoBehaviour
 
         foreach (Enemy e in enemies)
         {
-            if (e != null) return false; // still alive
+            if (e != null) return false;
         }
         return true;
     }
@@ -276,10 +271,10 @@ public class QuestManager : MonoBehaviour
         // Get completed objective
         Objective justCompleted = objectives[currentObjectiveIndex];
 
-        // ✅ PLAY COMPLETION DIALOGUE FIRST
+        // Play completion dialogue first
         yield return StartCoroutine(PlayDialogueSequence(justCompleted.completionSequence));
 
-        // ✅ CUTSCENE (if any)
+        // Cutscene (if any)
         if (justCompleted.cutscene != null)
         {
             bool done = false;
@@ -288,11 +283,20 @@ public class QuestManager : MonoBehaviour
             while (!done) yield return null;
         }
 
-        // ✅ NOW notify NPC AFTER dialogue/cutscene
+        // Notify NPC after dialogue/cutscene
         NPCQuestController npc = FindObjectOfType<NPCQuestController>();
         if (npc != null)
         {
             npc.OnObjectiveCompleted(currentObjectiveIndex);
+        }
+
+        // ✅ NEW: Teleport the player if this objective has a QuestTeleport assigned
+        if (justCompleted.questTeleport != null)
+        {
+            justCompleted.questTeleport.Execute();
+
+            // Wait until the fade + teleport fully finishes before advancing
+            yield return new WaitUntil(() => !GameState.IsPlayerFrozen);
         }
 
         // Move to next objective
@@ -307,7 +311,6 @@ public class QuestManager : MonoBehaviour
         StartObjective();
     }
 
-
     IEnumerator PlayDialogueSequence(DialogueEntry[] sequence)
     {
         if (sequence == null || sequence.Length == 0)
@@ -318,7 +321,6 @@ public class QuestManager : MonoBehaviour
             if (entry == null || entry.lines == null || entry.lines.Length == 0)
                 continue;
 
-            // 🎥 Trigger distortion ONLY when flagged
             if (entry.triggerDistortion && ScreenDistortionController.Instance != null)
             {
                 ScreenDistortionController.Instance.TriggerDistortion();
@@ -347,7 +349,6 @@ public class QuestManager : MonoBehaviour
     {
         hintShown = true;
 
-        // 🚨 ONLY show single arrow if NOT enemy objective
         if (CurrentObjective.type != ObjectiveType.DefeatEnemy)
         {
             arrow.enabled = true;
@@ -357,13 +358,13 @@ public class QuestManager : MonoBehaviour
             arrowFadeRoutine = StartCoroutine(FadeArrow(1f));
         }
     }
+
     void DisableArrowHard()
     {
         hintShown = false;
 
         if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
 
-        // Disable single arrow
         if (arrow) arrow.enabled = false;
 
         if (arrowGroup)
@@ -372,9 +373,9 @@ public class QuestManager : MonoBehaviour
             arrowGroup.gameObject.SetActive(false);
         }
 
-        // 🚨 ALSO clear multi-enemy arrows
         ClearEnemyArrows();
     }
+
     IEnumerator FadeArrow(float targetAlpha)
     {
         while (!Mathf.Approximately(arrowGroup.alpha, targetAlpha))
@@ -397,12 +398,13 @@ public class QuestManager : MonoBehaviour
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+
 [System.Serializable]
 public class Objective
 {
     public string objectiveName;
     public ObjectiveType type;
-
 
     [Tooltip("Tick to skip this objective entirely")]
     public bool skipObjective;
@@ -414,20 +416,25 @@ public class Objective
     public Transform[] triggerPoints;
 
     [Tooltip("Drag all enemies here for DefeatEnemy objectives")]
-    public Enemy[] targetEnemies;      // <-- changed from single to array
+    public Enemy[] targetEnemies;
 
     public int pointsReward;
 
     [Header("Cutscene (Optional)")]
     public CutsceneScript cutscene;
 
+    // ✅ NEW — drag a QuestTeleport component here to teleport after this objective completes
+    [Header("Teleport After Completion (Optional)")]
+    public QuestTeleport questTeleport;
+
     [Header("START DIALOGUE")]
     public DialogueEntry[] startSequence;
 
     [Header("COMPLETION DIALOGUE")]
     public DialogueEntry[] completionSequence;
-
 }
+
+// ─────────────────────────────────────────────────────────────p
 
 public enum ObjectiveType
 {

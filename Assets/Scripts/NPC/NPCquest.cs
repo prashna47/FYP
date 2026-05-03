@@ -17,16 +17,15 @@ public class NPCQuestController : MonoBehaviour
     public CanvasGroup interactPromptGroup;
     public string playerTag = "Player";
 
+    // ✅ NEW
+    [Header("Despawn")]
+    public float despawnDelay = 3f;
+
     private Transform player;
     private bool isWalking = false;
     private bool hasArrived = false;
     private bool talkObjectiveCompleted = false;
     private Quaternion fixedRotation;
-
-    // ✅ Reference to the player's movement script — assign in Inspector
-    // Replace "PlayerMovement" with whatever your actual movement script is called
-    [Header("Player Control")]
-    public MonoBehaviour playerMovementScript;
 
     void Start()
     {
@@ -37,21 +36,12 @@ public class NPCQuestController : MonoBehaviour
 
         GameObject p = GameObject.FindGameObjectWithTag(playerTag);
         if (p != null)
-        {
             player = p.transform;
-
-            // ✅ Auto-find the movement script if not assigned in Inspector
-            if (playerMovementScript == null)
-                playerMovementScript = p.GetComponent<MonoBehaviour>();
-        }
     }
 
     void Update()
     {
-        
         if (GameState.IsPaused || GameState.IsPlayerFrozen) return;
-        // rest of movement + sprite flip logic
-       
         HandleMovement();
     }
 
@@ -66,11 +56,16 @@ public class NPCQuestController : MonoBehaviour
     System.Collections.IEnumerator StartWalk()
     {
         yield return new WaitForSeconds(0.2f);
+
+        GameObject p = GameObject.FindGameObjectWithTag(playerTag);
+        if (p != null)
+            player = p.transform;
+
         isWalking = true;
         hasArrived = false;
 
-        // ✅ Freeze the player as NPC begins walking
-        SetPlayerFrozen(true);
+        PlayerControlLock.MovementLocked = true;
+        InteractionLock.DialoguePlaying = true;
     }
 
     void HandleMovement()
@@ -106,10 +101,7 @@ public class NPCQuestController : MonoBehaviour
             if (animator != null)
                 animator.SetFloat("Speed", 0f);
 
-            // ✅ NPC has arrived — unfreeze the player
-            SetPlayerFrozen(false);
-
-            CompleteTalkObjective();
+            StartCoroutine(ArriveAndWaitForDialogue());
         }
 
         if (hasArrived && player != null && animator != null)
@@ -118,6 +110,33 @@ public class NPCQuestController : MonoBehaviour
             animator.SetFloat("MoveX", lookDir.x);
             animator.SetFloat("MoveY", lookDir.z);
         }
+    }
+
+    System.Collections.IEnumerator ArriveAndWaitForDialogue()
+    {
+        CompleteTalkObjective();
+
+        yield return null;
+        yield return null;
+
+        if (ObjectiveDialogueUI.Instance != null)
+        {
+            while (!ObjectiveDialogueUI.Instance.IsFinished)
+                yield return null;
+        }
+
+        PlayerControlLock.MovementLocked = false;
+        InteractionLock.DialoguePlaying = false;
+
+        // ✅ NEW — start despawn timer after dialogue ends
+        StartCoroutine(DespawnAfterDelay());
+    }
+
+    // ✅ NEW
+    System.Collections.IEnumerator DespawnAfterDelay()
+    {
+        yield return new WaitForSeconds(despawnDelay);
+        gameObject.SetActive(false);
     }
 
     void CompleteTalkObjective()
@@ -132,17 +151,5 @@ public class NPCQuestController : MonoBehaviour
             if (interactPromptGroup != null)
                 interactPromptGroup.alpha = 0f;
         }
-    }
-
-    // ✅ Freeze/unfreeze the player
-    private void SetPlayerFrozen(bool frozen)
-    {
-        // Option A — disable/enable the movement script component entirely
-        if (playerMovementScript != null)
-            playerMovementScript.enabled = !frozen;
-
-        // Option B — use GameState so your player script can check it
-        // (use this if your player already checks GameState.IsPaused)
-        // GameState.IsPlayerFrozen = frozen;
     }
 }
