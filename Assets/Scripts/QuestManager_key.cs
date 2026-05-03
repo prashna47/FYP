@@ -191,6 +191,11 @@ public class QuestManager : MonoBehaviour
                 completed = AllEnemiesDead(obj.targetEnemies);
                 break;
 
+            // ✅ NEW
+            case ObjectiveType.DrinkPotion:
+                if (obj.potion != null) completed = !obj.potion.gameObject.activeSelf;
+                break;
+
             case ObjectiveType.ReachLocation:
             case ObjectiveType.Sleep:
                 return;
@@ -268,13 +273,10 @@ public class QuestManager : MonoBehaviour
 
         StoryProgress.Instance.AddPointsSmooth(points);
 
-        // Get completed objective
         Objective justCompleted = objectives[currentObjectiveIndex];
 
-        // Play completion dialogue first
         yield return StartCoroutine(PlayDialogueSequence(justCompleted.completionSequence));
 
-        // Cutscene (if any)
         if (justCompleted.cutscene != null)
         {
             bool done = false;
@@ -283,23 +285,38 @@ public class QuestManager : MonoBehaviour
             while (!done) yield return null;
         }
 
-        // Notify NPC after dialogue/cutscene
         NPCQuestController npc = FindObjectOfType<NPCQuestController>();
         if (npc != null)
-        {
             npc.OnObjectiveCompleted(currentObjectiveIndex);
-        }
 
-        // ✅ NEW: Teleport the player if this objective has a QuestTeleport assigned
+        // ✅ NEW — show name screen after completion dialogues if flagged
+        if (justCompleted.showNameScreenAfterComplete && PlayerNameUI.Instance != null)
+            yield return PlayerNameUI.Instance.ShowAndWait();
+
+        // Teleport the player if this objective has a QuestTeleport assigned
         if (justCompleted.questTeleport != null)
         {
             justCompleted.questTeleport.Execute();
-
-            // Wait until the fade + teleport fully finishes before advancing
             yield return new WaitUntil(() => !GameState.IsPlayerFrozen);
         }
 
-        // Move to next objective
+        // ✅ NEW — show choice screen if flagged
+        if (justCompleted.showChoiceScreen && PlayerChoiceUI.Instance != null)
+        {
+            yield return PlayerChoiceUI.Instance.ShowAndWait(
+                justCompleted.choicePrompt,
+                justCompleted.choiceLabelA,
+                justCompleted.choiceLabelB
+            );
+
+            // If they picked Head Out, fire the choice teleport
+            if (PlayerChoiceUI.Instance.ChoseHeadOut && justCompleted.choiceTeleport != null)
+            {
+                justCompleted.choiceTeleport.Execute();
+                yield return new WaitUntil(() => !GameState.IsPlayerFrozen);
+            }
+        }
+
         currentObjectiveIndex++;
 
         if (currentObjectiveIndex >= objectives.Length)
@@ -322,23 +339,12 @@ public class QuestManager : MonoBehaviour
                 continue;
 
             if (entry.triggerDistortion && ScreenDistortionController.Instance != null)
-            {
                 ScreenDistortionController.Instance.TriggerDistortion();
-            }
 
             if (entry.speaker == SpeakerType.Player)
-            {
                 ObjectiveDialogueUI.Instance.ShowDialogue(entry.lines, true);
-            }
             else
-            {
-                ObjectiveDialogueUI.Instance.ShowDialogue(
-                    entry.lines,
-                    false,
-                    entry.npcPortrait,
-                    entry.npcName
-                );
-            }
+                ObjectiveDialogueUI.Instance.ShowDialogue(entry.lines, false, entry.npcPortrait, entry.npcName);
 
             while (!ObjectiveDialogueUI.Instance.IsFinished)
                 yield return null;
@@ -398,8 +404,6 @@ public class QuestManager : MonoBehaviour
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-
 [System.Serializable]
 public class Objective
 {
@@ -418,12 +422,18 @@ public class Objective
     [Tooltip("Drag all enemies here for DefeatEnemy objectives")]
     public Enemy[] targetEnemies;
 
+    // ✅ NEW
+    [Tooltip("Drag your potion GameObject here for DrinkPotion objectives")]
+    public ProximityPotionInteractable potion;
+
+    [Tooltip("Tick this on the objective after which the name screen should appear")]
+    public bool showNameScreenAfterComplete;
+
     public int pointsReward;
 
     [Header("Cutscene (Optional)")]
     public CutsceneScript cutscene;
 
-    // ✅ NEW — drag a QuestTeleport component here to teleport after this objective completes
     [Header("Teleport After Completion (Optional)")]
     public QuestTeleport questTeleport;
 
@@ -432,9 +442,14 @@ public class Objective
 
     [Header("COMPLETION DIALOGUE")]
     public DialogueEntry[] completionSequence;
-}
 
-// ─────────────────────────────────────────────────────────────p
+    [Header("Choice Screen (Optional)")]
+    public bool showChoiceScreen;
+    public string choicePrompt = "What would you like to do?";
+    public string choiceLabelA = "Head Out";
+    public string choiceLabelB = "Stay and Explore";
+    public QuestTeleport choiceTeleport; // used if player picks Head Out
+}
 
 public enum ObjectiveType
 {
@@ -442,7 +457,8 @@ public enum ObjectiveType
     OpenDoor,
     ReachLocation,
     Sleep,
-    DefeatEnemy
+    DefeatEnemy,
+    DrinkPotion  // ✅ NEW
 }
 
 public enum SpeakerType

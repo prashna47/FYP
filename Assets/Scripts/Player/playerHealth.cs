@@ -38,4 +38,9 @@ public class PlayerHealth : MonoBehaviour
     {
         Debug.Log("Player died.");
     }
+    public void HealToFull()
+    {
+        currentHP = maxHP;
+        if (healthBar != null) healthBar.UpdateHealth(currentHP, maxHP);
+    }
 }

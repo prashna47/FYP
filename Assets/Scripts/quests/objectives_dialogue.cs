@@ -109,7 +109,7 @@ public class ObjectiveDialogueUI : MonoBehaviour
         if (nameText != null)
         {
             if (isPlayer)
-                nameText.text = "You";
+                nameText.text = string.IsNullOrEmpty(GameData.PlayerName) ? "You" : GameData.PlayerName;
             else
                 nameText.text = string.IsNullOrEmpty(npcName) ? "NPC" : npcName;
         }
@@ -227,6 +227,10 @@ public class ObjectiveDialogueUI : MonoBehaviour
     {
         isTyping = true;
         dialogText.text = "";
+
+        // ✅ Replace {name} with whatever the player typed
+        fullLine = fullLine.Replace("{name}", string.IsNullOrEmpty(GameData.PlayerName) ? "You" : GameData.PlayerName);
+        currentLineFull = fullLine;
 
         float delay = 1f / Mathf.Max(1f, charsPerSecond);
 
