@@ -5,7 +5,6 @@ public class Demo_Controller : MonoBehaviour
 {
     [SerializeField] private Runestone_Controller runestoneScript;
     [SerializeField] private Portal_Controller portalSimpleScripts;
-    [SerializeField] private PortalRound_Controller portalRoundScripts;
     [SerializeField] private PortalGate_Controller portalGateScript;
     [SerializeField] private Vortex_Controller vortexScript;
     [SerializeField] private Rift_Controller riftScript;
@@ -66,8 +65,6 @@ public class Demo_Controller : MonoBehaviour
         yield return new WaitForSeconds(3f);
         StartCoroutine(CameraRoutine());
         
-        yield return new WaitForSeconds(2f);
-        portalRoundScripts.F_TogglePortalRound(true);
         
         yield return new WaitForSeconds(4f);
         vortexScript.F_ToggleVortex(true);
@@ -90,8 +87,6 @@ public class Demo_Controller : MonoBehaviour
         yield return new WaitForSeconds(8f);
         runestoneScript.ToggleRuneStone(false);
         
-        yield return new WaitForSeconds(2f);
-        portalRoundScripts.F_TogglePortalRound(false);
         
         yield return new WaitForSeconds(5f);
         vortexScript.F_ToggleVortex(false);
