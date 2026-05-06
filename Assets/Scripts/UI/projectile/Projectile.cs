@@ -8,13 +8,26 @@ public class OrbProjectile : MonoBehaviour
     [Header("Impact")]
     public GameObject impactEffect;
 
+    [Header("Impact")]
+    public float impactYOffset = -0.3f;    // ← tweak this in Inspector until it looks right
+
     private Vector3 startPosition;
     private Vector3 moveDirection;
+    private Vector3 targetPoint;        // ← store the actual target
+    private bool hasTarget = false;
 
     public void SetTarget(Vector3 target)
     {
-        // No Y lock — use the exact hit point
-        Vector3 direction = target - transform.position;
+        targetPoint = target;
+        hasTarget = true;
+        startPosition = transform.position;
+
+        // Calculate direction from THIS object's actual world center, not firePoint
+        Vector3 from = transform.position;
+        from.y = target.y;    // ← flatten both to same Y before calculating direction
+
+        Vector3 direction = target - from;
+
         if (direction != Vector3.zero)
         {
             moveDirection = direction.normalized;
@@ -24,14 +37,29 @@ public class OrbProjectile : MonoBehaviour
 
     void Start()
     {
-        startPosition = transform.position;
+        
     }
 
     void Update()
     {
         if (GameState.IsPaused) return;
+
         transform.position += moveDirection * speed * Time.deltaTime;
 
+        // Stop exactly at the target point
+        if (hasTarget)
+        {
+            Vector3 flat = transform.position;
+            flat.y = targetPoint.y;
+
+            if (Vector3.Distance(flat, targetPoint) < 0.1f)
+            {
+                Impact();
+                return;
+            }
+        }
+
+        // Fallback: max distance cap
         if (Vector3.Distance(transform.position, startPosition) >= maxDistance)
         {
             Impact();
@@ -55,7 +83,10 @@ public class OrbProjectile : MonoBehaviour
     {
         if (impactEffect != null)
         {
-            GameObject effect = Instantiate(impactEffect, transform.position, Quaternion.identity);
+            Vector3 impactPos = transform.position;
+            impactPos.y = targetPoint.y + impactYOffset;   // ← apply offset
+
+            GameObject effect = Instantiate(impactEffect, impactPos, Quaternion.identity);
             Destroy(effect, 2f);
         }
 

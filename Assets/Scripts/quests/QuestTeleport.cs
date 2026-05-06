@@ -66,7 +66,11 @@ public class QuestTeleport : MonoBehaviour
         if (fader != null)
             yield return fader.FadeIn();
 
+        
         // Unfreeze player
         GameState.IsPlayerFrozen = false;
+        PlayerControlLock.MovementLocked = false;
+        InteractionLock.DialoguePlaying = false;
     }
 }
+    

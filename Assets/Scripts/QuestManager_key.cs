@@ -289,6 +289,9 @@ public class QuestManager : MonoBehaviour
         if (npc != null)
             npc.OnObjectiveCompleted(currentObjectiveIndex);
 
+        // ✅ ADD THIS LINE — notifies AppearOnObjectiveNPC (and any future listener)
+        AppearOnObjectiveNPC.OnQuestObjectiveCompleted?.Invoke(currentObjectiveIndex);
+
         // ✅ NEW — show name screen after completion dialogues if flagged
         if (justCompleted.showNameScreenAfterComplete && PlayerNameUI.Instance != null)
             yield return PlayerNameUI.Instance.ShowAndWait();

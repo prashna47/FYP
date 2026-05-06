@@ -6,6 +6,7 @@ namespace IdyllicFantasyNature
     {
         [Tooltip("child with the mesh renderer to make the butterfly invisible when the animation is not running")]
         [SerializeField] private GameObject _butterflyChild;
+        [SerializeField] private float animationSpeed = 0.5f;
         // the spawn area script to get the data from the set range and cooldown
         private ButterflySpawnArea _area;
         // the cooldown to respawn the butterfly
@@ -19,6 +20,7 @@ namespace IdyllicFantasyNature
         void Start()
         {
             _animator = GetComponent<Animator>();
+            _animator.speed = animationSpeed;
             _area = GetComponentInParent<ButterflySpawnArea>();
 
             // sets the animator off to not play the animation before the cooldown reaches 0

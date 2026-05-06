@@ -93,7 +93,6 @@ public class StaticNPCInteractable : MonoBehaviour, IInteractable
         {
             isHandlingChoice = false;
 
-            // ✅ Make sure locks are fully clear before teleport takes over
             PlayerControlLock.MovementLocked = false;
             InteractionLock.DialoguePlaying = false;
 
@@ -102,6 +101,11 @@ public class StaticNPCInteractable : MonoBehaviour, IInteractable
                 headOutTeleport.Execute();
                 yield return new WaitUntil(() => !GameState.IsPlayerFrozen);
             }
+
+            // ✅ Force everything unlocked after teleport finishesp
+            PlayerControlLock.MovementLocked = false;
+            InteractionLock.DialoguePlaying = false;
+            GameState.IsPlayerFrozen = false;
         }
         else
         {

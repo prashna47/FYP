@@ -19398,9 +19398,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   speed: 12
-  lifetime: 5
+  maxDistance: 20
   impactEffect: {fileID: 4115455537270748339, guid: 6555300494081614fa6b6a823cca9f64,
     type: 3}
+  impactYOffset: 0.79
 --- !u!1 &2637730056466680099
 GameObject:
   m_ObjectHideFlags: 0

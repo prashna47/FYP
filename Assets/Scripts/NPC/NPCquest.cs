@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections;
 
 public class NPCQuestController : MonoBehaviour
 {
@@ -11,21 +12,24 @@ public class NPCQuestController : MonoBehaviour
 
     [Header("Quest Settings")]
     public int walkAfterObjectiveIndex = 2;
-    public int talkObjectiveIndex = 3;
+    public int talkObjectiveIndex = 9; // FIXED USAGE
 
     [Header("Interaction")]
     public CanvasGroup interactPromptGroup;
     public string playerTag = "Player";
 
-    // ✅ NEW
     [Header("Despawn")]
-    public float despawnDelay = 3f;
+    public float despawnDelay = 5f;
 
     private Transform player;
     private bool isWalking = false;
     private bool hasArrived = false;
-    private bool talkObjectiveCompleted = false;
+
     private Quaternion fixedRotation;
+
+    // 🔥 DESPAWN CONTROL
+    private bool talkTriggered;
+    private bool despawnQueued;
 
     void Start()
     {
@@ -51,9 +55,22 @@ public class NPCQuestController : MonoBehaviour
         {
             StartCoroutine(StartWalk());
         }
+
+        // 🎯 mark TALK objective
+        if (completedIndex == talkObjectiveIndex)
+        {
+            talkTriggered = true;
+            return;
+        }
+
+        // 🎯 NEXT objective after talk triggers despawn
+        if (talkTriggered && completedIndex > talkObjectiveIndex)
+        {
+            StartDespawnTimer();
+        }
     }
 
-    System.Collections.IEnumerator StartWalk()
+    IEnumerator StartWalk()
     {
         yield return new WaitForSeconds(0.2f);
 
@@ -112,7 +129,7 @@ public class NPCQuestController : MonoBehaviour
         }
     }
 
-    System.Collections.IEnumerator ArriveAndWaitForDialogue()
+    IEnumerator ArriveAndWaitForDialogue()
     {
         CompleteTalkObjective();
 
@@ -128,22 +145,54 @@ public class NPCQuestController : MonoBehaviour
         PlayerControlLock.MovementLocked = false;
         InteractionLock.DialoguePlaying = false;
 
-        // ✅ NEW — start despawn timer after dialogue ends
-        StartCoroutine(DespawnAfterDelay());
+        // NPC stays alive after talk objective
     }
 
-    // ✅ NEW
-    System.Collections.IEnumerator DespawnAfterDelay()
+    // 🔥 SAFE DESPAWN START
+    void StartDespawnTimer()
+    {
+        if (despawnQueued) return;
+
+        despawnQueued = true;
+        StartCoroutine(DelayedFadeOut());
+    }
+
+    // 🔥 FADE + DESPAWN
+    IEnumerator DelayedFadeOut()
     {
         yield return new WaitForSeconds(despawnDelay);
+
+        float t = 0f;
+        float duration = 1f;
+
+        Renderer[] renderers = GetComponentsInChildren<Renderer>();
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float alpha = 1f - (t / duration);
+
+            foreach (var r in renderers)
+            {
+                foreach (var mat in r.materials)
+                {
+                    if (mat.HasProperty("_Color"))
+                    {
+                        Color c = mat.color;
+                        c.a = alpha;
+                        mat.color = c;
+                    }
+                }
+            }
+
+            yield return null;
+        }
+
         gameObject.SetActive(false);
     }
 
     void CompleteTalkObjective()
     {
-        if (talkObjectiveCompleted) return;
-        talkObjectiveCompleted = true;
-
         if (QuestManager.Instance.CurrentObjectiveIndex == talkObjectiveIndex)
         {
             QuestManager.Instance.TriggerReached();
