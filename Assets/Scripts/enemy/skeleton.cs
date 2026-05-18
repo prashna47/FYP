@@ -268,25 +268,19 @@ public class SkeletonEnemy : MonoBehaviour
 
     void Die()
     {
-        animator.SetBool("IsDead", true);
-
-        if (isDead) return;
+        if (isDead) return;  // ← must be FIRST
         isDead = true;
 
-        // Stop everything cleanly before triggering death
         StopAllCoroutines();
         isAttacking = false;
         isHit = false;
 
-        // Zero out movement so no blend tree state bleeds into death
+        animator.SetBool("IsDead", true);  // ← now safe to set after guard
         animator.SetFloat(HashSpeed, 0f);
         animator.SetFloat(HashMoveX, 0f);
         animator.SetFloat(HashMoveY, 0f);
-
-        // Clear any pending triggers that could interrupt Die
         animator.ResetTrigger(HashAttack);
         animator.ResetTrigger(HashHit);
-
         animator.SetTrigger(HashDie);
 
         if (col != null) col.enabled = false;

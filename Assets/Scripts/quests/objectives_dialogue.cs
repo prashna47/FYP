@@ -58,6 +58,23 @@ public class ObjectiveDialogueUI : MonoBehaviour
         if (dialogText) dialogText.text = "";
     }
 
+    public void Skip()
+    {
+        if (isTyping)
+        {
+            FinishCurrentLineInstant();
+        }
+        else
+        {
+            NextLine();
+        }
+    }
+
+    public bool IsDialogueActive()
+    {
+        return dialogOpen;
+    }
+
     void Update()
     {
         if (!dialogOpen) return;
@@ -78,6 +95,24 @@ public class ObjectiveDialogueUI : MonoBehaviour
             FinishCurrentLineInstant();
         else
             NextLine();
+    }
+
+    public void ForceFinishDialogue()
+    {
+        StopAllCoroutines();
+
+        if (typingRoutine != null)
+            StopCoroutine(typingRoutine);
+
+        isTyping = false;
+        dialogOpen = false;
+
+        if (dialogText != null)
+            dialogText.text = currentLineFull;
+
+        FadeOut(dialogBoxGroup, ref dialogFadeRoutine);
+
+        StartCoroutine(MarkFinishedAfterFade());
     }
     public void ShowDialogue(string[] lines, bool isPlayer, Sprite npcPortrait = null, string npcName = "")
     {
@@ -242,6 +277,8 @@ public class ObjectiveDialogueUI : MonoBehaviour
 
         isTyping = false;
     }
+
+
 
     void FinishCurrentLineInstant()
     {

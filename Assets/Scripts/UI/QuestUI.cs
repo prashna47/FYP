@@ -33,6 +33,8 @@ public class QuestUI : MonoBehaviour
             tickIcon.SetActive(false);
     }
 
+ 
+
     public void ShowObjective(string text)
     {
         objectiveText.text = text;

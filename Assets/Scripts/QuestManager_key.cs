@@ -6,6 +6,9 @@ public class QuestManager : MonoBehaviour
 {
     public static QuestManager Instance;
 
+    private DialoguePhase currentDialoguePhase = DialoguePhase.None;
+    private bool skipRequested = false;
+
     [Header("Quest Settings")]
     public float hintDelay = 30f;
 
@@ -106,7 +109,9 @@ public class QuestManager : MonoBehaviour
 
         QuestUI.Instance.HideImmediate();
 
-        yield return StartCoroutine(PlayDialogueSequence(obj.startSequence));
+        yield return StartCoroutine(
+    PlayDialogueSequence(obj.startSequence, DialoguePhase.Start)
+);
 
         ResetTimer();
         DisableArrowHard();
@@ -126,6 +131,12 @@ public class QuestManager : MonoBehaviour
         Objective obj = CurrentObjective;
 
         if (obj.type == ObjectiveType.DefeatEnemy)
+        {
+            arrow.enabled = false;
+            arrowGroup.gameObject.SetActive(false);
+        }
+
+        if (obj.type == ObjectiveType.DefeatEnemy || obj.type == ObjectiveType.DefeatSkeleton)
         {
             arrow.enabled = false;
             arrowGroup.gameObject.SetActive(false);
@@ -191,6 +202,10 @@ public class QuestManager : MonoBehaviour
                 completed = AllEnemiesDead(obj.targetEnemies);
                 break;
 
+            case ObjectiveType.DefeatSkeleton:
+                completed = AllSkeletonsDead(obj.targetSkeletons);
+                break;
+
             // ✅ NEW
             case ObjectiveType.DrinkPotion:
                 if (obj.potion != null) completed = !obj.potion.gameObject.activeSelf;
@@ -215,6 +230,16 @@ public class QuestManager : MonoBehaviour
         foreach (Enemy e in enemies)
         {
             if (e != null) return false;
+        }
+        return true;
+    }
+    bool AllSkeletonsDead(SkeletonEnemy[] skeletons)
+    {
+        if (skeletons == null || skeletons.Length == 0) return false;
+
+        foreach (SkeletonEnemy s in skeletons)
+        {
+            if (s != null) return false;
         }
         return true;
     }
@@ -275,7 +300,9 @@ public class QuestManager : MonoBehaviour
 
         Objective justCompleted = objectives[currentObjectiveIndex];
 
-        yield return StartCoroutine(PlayDialogueSequence(justCompleted.completionSequence));
+        yield return StartCoroutine(
+    PlayDialogueSequence(justCompleted.completionSequence, DialoguePhase.Completion)
+);
 
         if (justCompleted.cutscene != null)
         {
@@ -331,13 +358,22 @@ public class QuestManager : MonoBehaviour
         StartObjective();
     }
 
-    IEnumerator PlayDialogueSequence(DialogueEntry[] sequence)
+    IEnumerator PlayDialogueSequence(DialogueEntry[] sequence, DialoguePhase phase)
     {
         if (sequence == null || sequence.Length == 0)
             yield break;
 
+        currentDialoguePhase = phase;
+        skipRequested = false;
+
         foreach (var entry in sequence)
         {
+            if (skipRequested)
+            {
+                ObjectiveDialogueUI.Instance.ForceFinishDialogue();
+                break;
+            }
+
             if (entry == null || entry.lines == null || entry.lines.Length == 0)
                 continue;
 
@@ -349,9 +385,26 @@ public class QuestManager : MonoBehaviour
             else
                 ObjectiveDialogueUI.Instance.ShowDialogue(entry.lines, false, entry.npcPortrait, entry.npcName);
 
-            while (!ObjectiveDialogueUI.Instance.IsFinished)
+            while (!ObjectiveDialogueUI.Instance.IsFinished && !skipRequested)
                 yield return null;
+
+            if (skipRequested)
+            {
+                ObjectiveDialogueUI.Instance.ForceFinishDialogue();
+                break;
+            }
         }
+
+        currentDialoguePhase = DialoguePhase.None;
+        skipRequested = false;
+    }
+
+    public void SkipDialogue()
+    {
+        if (currentDialoguePhase == DialoguePhase.None)
+            return;
+
+        skipRequested = true;
     }
 
     void ShowArrow()
@@ -394,6 +447,8 @@ public class QuestManager : MonoBehaviour
         }
     }
 
+
+
     void ResetTimer()
     {
         timer = 0f;
@@ -406,6 +461,8 @@ public class QuestManager : MonoBehaviour
             bedInteractable.SetInteractionEnabled(objectiveIndex >= 5);
     }
 }
+
+
 
 [System.Serializable]
 public class Objective
@@ -424,6 +481,9 @@ public class Objective
 
     [Tooltip("Drag all enemies here for DefeatEnemy objectives")]
     public Enemy[] targetEnemies;
+
+    [Tooltip("Drag all skeletons here for DefeatSkeleton objectives")]
+    public SkeletonEnemy[] targetSkeletons;
 
     // ✅ NEW
     [Tooltip("Drag your potion GameObject here for DrinkPotion objectives")]
@@ -452,7 +512,17 @@ public class Objective
     public string choiceLabelA = "Head Out";
     public string choiceLabelB = "Stay and Explore";
     public QuestTeleport choiceTeleport; // used if player picks Head Out
+
+
 }
+
+public enum DialoguePhase
+{
+    None,
+    Start,
+    Completion
+}
+
 
 public enum ObjectiveType
 {
@@ -461,7 +531,8 @@ public enum ObjectiveType
     ReachLocation,
     Sleep,
     DefeatEnemy,
-    DrinkPotion  // ✅ NEW
+    DrinkPotion,
+    DefeatSkeleton
 }
 
 public enum SpeakerType
@@ -483,3 +554,4 @@ public class DialogueEntry
     public string[] lines;
     public bool triggerDistortion;
 }
+
