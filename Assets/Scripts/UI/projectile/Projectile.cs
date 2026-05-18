@@ -70,10 +70,22 @@ public class OrbProjectile : MonoBehaviour
     {
         if (collision.gameObject.CompareTag("Player")) return;
 
+        // Existing enemy
         Enemy enemy = collision.gameObject.GetComponent<Enemy>();
         if (enemy != null)
         {
             enemy.TakeDamage(1);
+            Impact();
+            return;
+        }
+
+        // 🔥 ADD THIS
+        SkeletonEnemy skeleton = collision.gameObject.GetComponent<SkeletonEnemy>();
+        if (skeleton != null)
+        {
+            skeleton.TakeDamage(1);
+            Impact();
+            return;
         }
 
         Impact();
