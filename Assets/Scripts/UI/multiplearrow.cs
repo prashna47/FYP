@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class MultiEnemyArrow : MonoBehaviour
 {
@@ -7,18 +7,17 @@ public class MultiEnemyArrow : MonoBehaviour
     public float onScreenOffset = 80f;
 
     private Transform target;
-    private Enemy targetEnemy;
 
-    public void SetTarget(Enemy enemy)
+    // ✅ Now works for ANY enemy type
+    public void SetTarget(Transform t)
     {
-        targetEnemy = enemy;
-        target = enemy.transform;
+        target = t;
     }
 
     void Update()
     {
-        // Destroy arrow when enemy is dead/gone
-        if (target == null || targetEnemy == null)
+        // Destroy arrow when target is gone
+        if (target == null)
         {
             Destroy(gameObject);
             return;

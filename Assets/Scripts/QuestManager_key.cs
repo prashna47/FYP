@@ -130,30 +130,49 @@ public class QuestManager : MonoBehaviour
     {
         Objective obj = CurrentObjective;
 
-        if (obj.type == ObjectiveType.DefeatEnemy)
-        {
-            arrow.enabled = false;
-            arrowGroup.gameObject.SetActive(false);
-        }
-
+        // Disable single arrow for combat
         if (obj.type == ObjectiveType.DefeatEnemy || obj.type == ObjectiveType.DefeatSkeleton)
         {
             arrow.enabled = false;
             arrowGroup.gameObject.SetActive(false);
         }
 
-        if (obj.type == ObjectiveType.DefeatEnemy && obj.targetEnemies != null && obj.targetEnemies.Length > 0)
+        if (obj.type == ObjectiveType.DefeatEnemy)
         {
             SpawnEnemyArrows(obj.targetEnemies);
             return;
         }
+        else if (obj.type == ObjectiveType.DefeatSkeleton)
+        {
+            SpawnSkeletonArrows(obj.targetSkeletons);
+            return;
+        }
 
+        // Normal objectives
         if (obj.arrowTargets != null && obj.arrowTargets.Length > currentStepIndex)
             arrow.target = obj.arrowTargets[currentStepIndex];
         else
             arrow.target = obj.arrowTarget;
     }
+    void SpawnSkeletonArrows(SkeletonEnemy[] skeletons)
+    {
+        ClearEnemyArrows();
 
+        if (enemyArrowPrefab == null || arrowCanvas == null) return;
+
+        foreach (SkeletonEnemy s in skeletons)
+        {
+            if (s == null) continue;
+
+            GameObject go = Instantiate(enemyArrowPrefab, arrowCanvas.transform);
+            MultiEnemyArrow mea = go.GetComponent<MultiEnemyArrow>();
+            if (mea != null)
+            {
+                mea.SetTarget(s.transform); // 👈 important
+                activeEnemyArrows.Add(mea);
+            }
+        }
+    }
     void SpawnEnemyArrows(Enemy[] enemies)
     {
         ClearEnemyArrows();
@@ -168,7 +187,7 @@ public class QuestManager : MonoBehaviour
             MultiEnemyArrow mea = go.GetComponent<MultiEnemyArrow>();
             if (mea != null)
             {
-                mea.SetTarget(e);
+                mea.SetTarget(e.transform);
                 activeEnemyArrows.Add(mea);
             }
         }
@@ -411,14 +430,18 @@ public class QuestManager : MonoBehaviour
     {
         hintShown = true;
 
-        if (CurrentObjective.type != ObjectiveType.DefeatEnemy)
+        // ❌ Don't show single arrow for ANY combat objective
+        if (CurrentObjective.type == ObjectiveType.DefeatEnemy ||
+            CurrentObjective.type == ObjectiveType.DefeatSkeleton)
         {
-            arrow.enabled = true;
-            arrowGroup.gameObject.SetActive(true);
-
-            if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
-            arrowFadeRoutine = StartCoroutine(FadeArrow(1f));
+            return;
         }
+
+        arrow.enabled = true;
+        arrowGroup.gameObject.SetActive(true);
+
+        if (arrowFadeRoutine != null) StopCoroutine(arrowFadeRoutine);
+        arrowFadeRoutine = StartCoroutine(FadeArrow(1f));
     }
 
     void DisableArrowHard()
@@ -448,7 +471,10 @@ public class QuestManager : MonoBehaviour
     }
 
 
-
+    public bool IsObjectiveCompleted(int index)
+    {
+        return index < currentObjectiveIndex;
+    }
     void ResetTimer()
     {
         timer = 0f;
