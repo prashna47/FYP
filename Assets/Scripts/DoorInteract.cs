@@ -9,6 +9,8 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
     public bool IsOpen { get; private set; }
 
+    bool isTeleporting = false;
+
     [Header("Prompt")]
     public string prompt = "Press [E] to interact";
     public string lockedPrompt = "Door is Locked. You need a key";
@@ -59,7 +61,7 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
     public void Interact(PlayerProximityInteractor interactor)
     {
-        if (interactor == null) return;
+        if (interactor == null || isTeleporting) return;
 
         PlayerItemHandler playerItemHandler = interactor.GetComponent<PlayerItemHandler>();
         if (playerItemHandler != null)
@@ -71,9 +73,8 @@ public class DoorInteractable : MonoBehaviour, IInteractable
                     UnlockDoor();
                     prompt = unlockedPrompt;
 
-                    // ✅ DESTROY THE KEY AFTER USE
                     Destroy(playerItemHandler.carriedItem);
-                    playerItemHandler.carriedItem = null; // clear reference
+                    playerItemHandler.carriedItem = null;
                 }
                 else
                 {
@@ -101,6 +102,7 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
     IEnumerator TeleportWithFade(PlayerProximityInteractor interactor, Transform target)
     {
+        isTeleporting = true; 
         IsOpen = true;
 
         if (fader != null)
@@ -128,5 +130,7 @@ public class DoorInteractable : MonoBehaviour, IInteractable
 
         if (fader != null)
             yield return fader.FadeIn();
+
+        isTeleporting = false; // ✅ allow interaction again
     }
 }

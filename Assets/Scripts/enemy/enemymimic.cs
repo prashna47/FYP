@@ -1,0 +1,387 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace MimicSpace
+{
+    [RequireComponent(typeof(Mimic))]
+    public class MimicEnemy : MonoBehaviour
+    {
+        // ── Movement ──────────────────────────────────────────────────────────
+        [Header("Body Height")]
+        [Range(0.5f, 5f)] public float height = 0.8f;
+        public float velocityLerpCoef = 4f;
+
+        [Header("Movement")]
+        public float moveSpeed = 2.5f;
+        public float chaseSpeed = 4f;
+
+        [Header("Wander")]
+        public float wanderRadius = 6f;
+        public float wanderWaitTime = 2f;
+
+        [Header("Detection")]
+        public float chaseRange = 8f;
+        public float attackRange = 2.5f;
+        [Tooltip("How long the Mimic keeps chasing after losing the player or being hit from afar")]
+        public float alertDuration = 5f;
+
+        // ── Health ────────────────────────────────────────────────────────────
+        [Header("Health")]
+        public int maxHP = 10;
+
+        [Header("Death")]
+        public float destroyDelay = 2f;
+        public GameObject smokePrefab;
+
+        // ── Hitbox ────────────────────────────────────────────────────────────
+        [Header("Hitbox")]
+        [Tooltip("Layer number of the 'MimicHitbox' layer (Tags and Layers window)")]
+        public int mimicHitboxLayer = 7;
+
+        public enum HitboxShape { Sphere, Box, Capsule }
+        public HitboxShape hitboxShape = HitboxShape.Sphere;
+
+        public float hitboxRadius = 1f;
+        public Vector3 hitboxBoxSize = new Vector3(2f, 1.5f, 2f);
+        public float hitboxCapsuleHeight = 2f;
+        public Vector3 hitboxOffset = Vector3.zero;
+
+        // ── Leg attack ────────────────────────────────────────────────────────
+        [Header("Leg Attack")]
+        public int attackDamage = 1;
+        public float damageCooldown = 1f;
+        public float legTipRadius = 0.35f;
+
+        // ── UI ────────────────────────────────────────────────────────────────
+        [Header("Health Bar UI")]
+        public MimicHealthBar healthBar;
+
+        // ── Private ───────────────────────────────────────────────────────────
+        private Mimic myMimic;
+        private Transform player;
+        private Vector3 velocity = Vector3.zero;
+
+        private Vector3 spawnPosition;
+        private Vector3 wanderTarget;
+        private float wanderWaitTimer = 0f;
+
+        private float damageTimer = 0f;
+        private float alertTimer = 0f;
+
+        private int currentHP = 0;
+        private bool isDead = false;
+
+        private enum AIState { Wander, Chase }
+        private AIState state = AIState.Wander;
+
+        private Dictionary<Leg, GameObject> legTriggers = new Dictionary<Leg, GameObject>();
+        private LayerMask legRaycastMask;
+
+        // =====================================================================
+
+        void Start()
+        {
+            myMimic = GetComponent<Mimic>();
+            currentHP = maxHP;
+            spawnPosition = transform.position;
+            SetNewWanderTarget();
+
+            GameObject p = GameObject.FindWithTag("Player");
+            if (p != null) player = p.transform;
+
+            // Exclude MimicHitbox from all leg raycasts
+            legRaycastMask = ~(1 << mimicHitboxLayer);
+            myMimic.legRaycastMask = legRaycastMask;
+
+            CreateHitbox();
+        }
+
+        void Update()
+        {
+            if (isDead) return;
+
+            if (damageTimer > 0f) damageTimer -= Time.deltaTime;
+            if (alertTimer > 0f) alertTimer -= Time.deltaTime;
+
+            SyncLegTriggers();
+            UpdateAI();
+            ApplyHeight();
+        }
+
+        // =====================================================================
+        //  Hitbox — auto-created trigger + kinematic Rigidbody so OnTriggerEnter fires
+        // =====================================================================
+
+        void CreateHitbox()
+        {
+            GameObject hb = new GameObject("MimicHitbox");
+            hb.transform.SetParent(transform);
+            hb.transform.localPosition = hitboxOffset;
+            hb.layer = mimicHitboxLayer;
+
+            // ── Collider ──────────────────────────────────────────────────────
+            switch (hitboxShape)
+            {
+                case HitboxShape.Sphere:
+                    var sc = hb.AddComponent<SphereCollider>();
+                    sc.isTrigger = true;
+                    sc.radius = hitboxRadius;
+                    break;
+
+                case HitboxShape.Box:
+                    var bc = hb.AddComponent<BoxCollider>();
+                    bc.isTrigger = true;
+                    bc.size = hitboxBoxSize;
+                    break;
+
+                case HitboxShape.Capsule:
+                    var cc = hb.AddComponent<CapsuleCollider>();
+                    cc.isTrigger = true;
+                    cc.radius = hitboxRadius;
+                    cc.height = hitboxCapsuleHeight;
+                    break;
+            }
+
+            // ── Kinematic Rigidbody — required for OnTriggerEnter to fire ─────
+            Rigidbody rb = hb.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            // ── Receiver script ───────────────────────────────────────────────
+            MimicHitboxReceiver recv = hb.AddComponent<MimicHitboxReceiver>();
+            recv.owner = this;
+        }
+
+        // =====================================================================
+        //  AI
+        // =====================================================================
+
+        void UpdateAI()
+        {
+            if (player == null) { DoWander(); return; }
+
+            float dist = HorizontalDist(transform.position, player.position);
+            bool playerInRange = dist <= chaseRange;
+            bool alerted = alertTimer > 0f;
+
+            if (state == AIState.Wander && (playerInRange || alerted))
+            {
+                state = AIState.Chase;
+                healthBar?.Show();
+            }
+
+            if (state == AIState.Chase && !playerInRange && !alerted)
+            {
+                state = AIState.Wander;
+                healthBar?.Hide();
+            }
+
+            if (state == AIState.Chase) DoChase(dist);
+            else DoWander();
+        }
+
+        void DoWander()
+        {
+            Vector3 flat = new Vector3(wanderTarget.x, transform.position.y, wanderTarget.z);
+            float dist = Vector3.Distance(transform.position, flat);
+
+            if (dist > 0.3f)
+            {
+                SetVelocity((flat - transform.position).normalized * moveSpeed);
+            }
+            else
+            {
+                SetVelocity(Vector3.zero);
+                wanderWaitTimer += Time.deltaTime;
+                if (wanderWaitTimer >= wanderWaitTime)
+                {
+                    SetNewWanderTarget();
+                    wanderWaitTimer = 0f;
+                }
+            }
+        }
+
+        void SetNewWanderTarget()
+        {
+            Vector2 rand = Random.insideUnitCircle * wanderRadius;
+            wanderTarget = spawnPosition + new Vector3(rand.x, 0, rand.y);
+        }
+
+        void DoChase(float dist)
+        {
+            if (dist <= attackRange) { SetVelocity(Vector3.zero); return; }
+            Vector3 dir = player.position - transform.position;
+            dir.y = 0;
+            SetVelocity(dir.normalized * chaseSpeed);
+        }
+
+        // =====================================================================
+        //  Movement helpers
+        // =====================================================================
+
+        void SetVelocity(Vector3 target)
+        {
+            velocity = Vector3.Lerp(velocity, target, velocityLerpCoef * Time.deltaTime);
+            myMimic.velocity = velocity;
+            transform.position += velocity * Time.deltaTime;
+        }
+
+        void ApplyHeight()
+        {
+            if (Physics.Raycast(transform.position + Vector3.up * 5f, -Vector3.up,
+                                out RaycastHit hit, 20f, legRaycastMask))
+            {
+                Vector3 dest = new Vector3(transform.position.x, hit.point.y + height, transform.position.z);
+                transform.position = Vector3.Lerp(transform.position, dest, velocityLerpCoef * Time.deltaTime);
+            }
+        }
+
+        // =====================================================================
+        //  Health
+        // =====================================================================
+
+        public void TakeDamage(int damage)
+        {
+            if (isDead) return;
+
+            currentHP = Mathf.Clamp(currentHP - damage, 0, maxHP);
+            alertTimer = alertDuration;
+
+            if (state == AIState.Wander)
+            {
+                state = AIState.Chase;
+                healthBar?.Show();
+            }
+
+            healthBar?.ShowHit(currentHP, maxHP);
+            Debug.Log($"[Mimic] TakeDamage({damage}) → HP now {currentHP}/{maxHP}");
+
+            if (currentHP <= 0)
+                StartCoroutine(Die());
+        }
+
+        IEnumerator Die()
+        {
+            isDead = true;
+            SetVelocity(Vector3.zero);
+            healthBar?.PlayDeathAnimation();
+
+            if (smokePrefab != null)
+                Instantiate(smokePrefab, transform.position, Quaternion.identity);
+
+            foreach (var kv in legTriggers)
+                if (kv.Value != null) kv.Value.SetActive(false);
+
+            yield return new WaitForSeconds(destroyDelay);
+            Destroy(gameObject);
+        }
+
+        // =====================================================================
+        //  Leg tip triggers — hurt player on contact
+        // =====================================================================
+
+        void SyncLegTriggers()
+        {
+            Leg[] activeLegs = GetComponentsInChildren<Leg>();
+
+            List<Leg> toRemove = new List<Leg>();
+            foreach (var kv in legTriggers)
+                if (kv.Key == null || kv.Value == null) toRemove.Add(kv.Key);
+            foreach (var leg in toRemove) legTriggers.Remove(leg);
+
+            foreach (Leg leg in activeLegs)
+            {
+                if (!legTriggers.ContainsKey(leg))
+                {
+                    GameObject tipGO = new GameObject("LegTipTrigger");
+                    tipGO.transform.SetParent(leg.transform);
+                    tipGO.layer = mimicHitboxLayer;
+
+                    SphereCollider sc = tipGO.AddComponent<SphereCollider>();
+                    sc.isTrigger = true;
+                    sc.radius = legTipRadius;
+
+                    // ── Kinematic Rigidbody — required for OnTriggerEnter to fire ──
+                    Rigidbody rb = tipGO.AddComponent<Rigidbody>();
+                    rb.isKinematic = true;
+                    rb.useGravity = false;
+
+                    LegTipDamager dmg = tipGO.AddComponent<LegTipDamager>();
+                    dmg.owner = this;
+
+                    legTriggers[leg] = tipGO;
+                }
+
+                if (legTriggers[leg] != null)
+                    legTriggers[leg].transform.position = leg.footPosition;
+            }
+        }
+
+        public void TryDealDamageToPlayer(Collider other)
+        {
+            if (isDead) return;
+            if (damageTimer > 0f) return;
+            if (!other.CompareTag("Player")) return;
+
+            PlayerHealth ph = other.GetComponent<PlayerHealth>()
+                           ?? other.GetComponentInParent<PlayerHealth>();
+            if (ph == null)
+            {
+                Debug.LogWarning("[Mimic] Player collider found but no PlayerHealth component on it or its parent.");
+                return;
+            }
+
+            Debug.Log("[Mimic] Leg touched player — dealing damage.");
+            ph.TakeDamage(attackDamage, transform.position);
+            damageTimer = damageCooldown;
+        }
+
+        // =====================================================================
+        //  Helpers
+        // =====================================================================
+
+        float HorizontalDist(Vector3 a, Vector3 b)
+        {
+            a.y = 0; b.y = 0;
+            return Vector3.Distance(a, b);
+        }
+
+        void OnDrawGizmosSelected()
+        {
+            Vector3 origin = Application.isPlaying ? spawnPosition : transform.position;
+            Gizmos.color = Color.yellow; Gizmos.DrawWireSphere(origin, wanderRadius);
+            Gizmos.color = Color.cyan; Gizmos.DrawWireSphere(transform.position, chaseRange);
+            Gizmos.color = Color.red; Gizmos.DrawWireSphere(transform.position, attackRange);
+        }
+    }
+
+    // ── Receives orb hits ─────────────────────────────────────────────────────
+    public class MimicHitboxReceiver : MonoBehaviour
+    {
+        [HideInInspector] public MimicEnemy owner;
+
+        void OnTriggerEnter(Collider other)
+        {
+            Debug.Log($"[MimicHitbox] OnTriggerEnter with: {other.gameObject.name} (layer {other.gameObject.layer})");
+            OrbProjectile orb = other.GetComponent<OrbProjectile>();
+            if (orb != null)
+            {
+                Debug.Log("[MimicHitbox] Orb detected — calling TakeDamage.");
+                owner?.TakeDamage(1);
+            }
+        }
+    }
+
+    // ── Hurts player on leg contact ───────────────────────────────────────────
+    public class LegTipDamager : MonoBehaviour
+    {
+        [HideInInspector] public MimicEnemy owner;
+
+        void OnTriggerEnter(Collider other)
+        {
+            Debug.Log($"[LegTip] OnTriggerEnter with: {other.gameObject.name} tag={other.tag}");
+            owner?.TryDealDamageToPlayer(other);
+        }
+    }
+}
