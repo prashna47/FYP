@@ -2,25 +2,7 @@
 using UnityEngine.UI;
 using System.Collections;
 
-/// <summary>
-/// Fixed screen-space health bar for the Mimic enemy.
-///
-/// SETUP:
-///  1. In a Screen Space – Overlay Canvas, build this hierarchy:
-///
-///       MimicHealthBar          ← this script + CanvasGroup
-///        └── Background         ← Image (dark, e.g. 300×18 px)
-///             ├── GhostFill     ← Image, Fill Method=Horizontal, Source Image=white sprite, Color = white 55% alpha
-///             ├── Fill          ← Image, Fill Method=Horizontal, Source Image=white sprite
-///             └── Label         ← Text / TextMeshProUGUI  "MIMIC" (optional)
-///
-///  2. Assign Fill → fillImage and GhostFill → ghostFill in the Inspector.
-///  3. Position MimicHealthBar's RectTransform wherever you want on screen.
-///     It will NOT move.
-///  4. Drag this scene GameObject into MimicEnemy → healthBar slot.
-///
-/// MimicEnemy calls Show() / Hide() / ShowHit() / PlayDeathAnimation() automatically.
-/// </summary>
+
 public class MimicHealthBar : MonoBehaviour
 {
     [Header("Bar References")]
@@ -35,13 +17,14 @@ public class MimicHealthBar : MonoBehaviour
     public float ghostDelay = 0.45f;
     public float ghostDrainSpeed = 2.2f;
 
-    [Header("Hit Punch")]
-    public float punchScale = 1.14f;
-    public float punchDuration = 0.09f;
+    [Header("Hit Flash")]
+    [Tooltip("Color the fill briefly flashes to when hit (white looks good)")]
+    public Color hitFlashColor = Color.white;
+    [Tooltip("How quickly the flash fades back to the normal health color")]
+    public float hitFlashDuration = 0.12f;
 
     // ── private ──────────────────────────────────────────────────────────────
     private CanvasGroup canvasGroup;
-    private RectTransform rectTransform;
 
     private float targetAlpha = 0f;
     private float currentFill = 1f;
@@ -49,9 +32,11 @@ public class MimicHealthBar : MonoBehaviour
     private float ghostFillAmt = 1f;
     private float ghostTimer = 0f;
 
+    // flash state — driven in Update, no coroutine needed
+    private float flashTimer = 0f;
+
     private bool isDying = false;
 
-    private Coroutine punchRoutine;
     private Coroutine deathRoutine;
 
     // =========================================================================
@@ -60,7 +45,6 @@ public class MimicHealthBar : MonoBehaviour
     {
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
-        rectTransform = GetComponent<RectTransform>();
 
         canvasGroup.alpha = 0f;
         canvasGroup.blocksRaycasts = false;
@@ -69,12 +53,12 @@ public class MimicHealthBar : MonoBehaviour
         if (ghostFill != null)
         {
             ghostFill.fillAmount = 1f;
-            ghostFill.color = new Color(1f, 0.85f, 0.3f, 0.55f);   // amber ghost
+            ghostFill.color = Color.white;   // amber ghost
         }
         if (fillImage != null)
         {
             fillImage.fillAmount = 1f;
-            fillImage.color = Color.green;
+            fillImage.color = Color.red;
         }
     }
 
@@ -82,12 +66,24 @@ public class MimicHealthBar : MonoBehaviour
     {
         if (isDying) return;
 
-        // ── smooth fill ──────────────────────────────────────────────────────
+        // ── smooth fill + hit flash ──────────────────────────────────────────
         if (fillImage != null)
         {
             currentFill = Mathf.Lerp(currentFill, targetFill, Time.deltaTime * 10f);
             fillImage.fillAmount = currentFill;
-            fillImage.color = Color.Lerp(Color.red, Color.green, currentFill);
+
+            // Flash white on hit, then lerp back to the green→red health colour
+            Color healthColor = Color.Lerp(Color.yellow, Color.red, currentFill);
+            if (flashTimer > 0f)
+            {
+                flashTimer -= Time.deltaTime;
+                float t = flashTimer / hitFlashDuration;           // 1→0 as flash fades
+                fillImage.color = Color.Lerp(healthColor, hitFlashColor, t);
+            }
+            else
+            {
+                fillImage.color = healthColor;
+            }
         }
 
         // ── ghost bar ────────────────────────────────────────────────────────
@@ -124,17 +120,15 @@ public class MimicHealthBar : MonoBehaviour
         targetAlpha = 0f;
     }
 
-    /// <summary>Called every time the Mimic takes a hit. Updates fill and punches the bar.</summary>
+    /// <summary>Called every time the Mimic takes a hit. Updates fill and flashes the bar.</summary>
     public void ShowHit(int current, int max)
     {
         if (isDying) return;
 
         targetFill = Mathf.Clamp01((float)current / max);
         ghostTimer = ghostDelay;
-        targetAlpha = 1f;   // always make sure bar is visible on hit
-
-        if (punchRoutine != null) StopCoroutine(punchRoutine);
-        punchRoutine = StartCoroutine(PunchScale());
+        targetAlpha = 1f;
+        flashTimer = hitFlashDuration;   // triggers the white flash in Update
     }
 
     /// <summary>Called by MimicEnemy.Die() — drains bar to zero then fades out.</summary>
@@ -147,19 +141,6 @@ public class MimicHealthBar : MonoBehaviour
     // =========================================================================
     //  Coroutines
     // =========================================================================
-
-    IEnumerator PunchScale()
-    {
-        float t = 0f;
-        while (t < punchDuration)
-        {
-            t += Time.deltaTime;
-            float s = Mathf.Lerp(punchScale, 1f, t / punchDuration);
-            rectTransform.localScale = new Vector3(s, s, 1f);
-            yield return null;
-        }
-        rectTransform.localScale = Vector3.one;
-    }
 
     IEnumerator DeathFade()
     {

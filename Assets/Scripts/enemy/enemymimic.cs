@@ -110,7 +110,9 @@ namespace MimicSpace
         }
 
         // =====================================================================
-        //  Hitbox — auto-created trigger + kinematic Rigidbody so OnTriggerEnter fires
+        //  Hitbox — solid (non-trigger) collider so the orb's OnCollisionEnter hits it.
+        //  Same approach as the Skeleton's CapsuleCollider.
+        //  It lives on the MimicHitbox layer which leg raycasts exclude via legRaycastMask.
         // =====================================================================
 
         void CreateHitbox()
@@ -120,35 +122,30 @@ namespace MimicSpace
             hb.transform.localPosition = hitboxOffset;
             hb.layer = mimicHitboxLayer;
 
-            // ── Collider ──────────────────────────────────────────────────────
+            // ── Solid collider (isTrigger = FALSE) — orb bounces off this ─────
             switch (hitboxShape)
             {
                 case HitboxShape.Sphere:
                     var sc = hb.AddComponent<SphereCollider>();
-                    sc.isTrigger = true;
+                    sc.isTrigger = false;   // SOLID
                     sc.radius = hitboxRadius;
                     break;
 
                 case HitboxShape.Box:
                     var bc = hb.AddComponent<BoxCollider>();
-                    bc.isTrigger = true;
+                    bc.isTrigger = false;   // SOLID
                     bc.size = hitboxBoxSize;
                     break;
 
                 case HitboxShape.Capsule:
                     var cc = hb.AddComponent<CapsuleCollider>();
-                    cc.isTrigger = true;
+                    cc.isTrigger = false;   // SOLID
                     cc.radius = hitboxRadius;
                     cc.height = hitboxCapsuleHeight;
                     break;
             }
 
-            // ── Kinematic Rigidbody — required for OnTriggerEnter to fire ─────
-            Rigidbody rb = hb.AddComponent<Rigidbody>();
-            rb.isKinematic = true;
-            rb.useGravity = false;
-
-            // ── Receiver script ───────────────────────────────────────────────
+            // ── Receiver script — uses OnCollisionEnter to match the orb ──────
             MimicHitboxReceiver recv = hb.AddComponent<MimicHitboxReceiver>();
             recv.owner = this;
         }
@@ -296,13 +293,17 @@ namespace MimicSpace
                 {
                     GameObject tipGO = new GameObject("LegTipTrigger");
                     tipGO.transform.SetParent(leg.transform);
-                    tipGO.layer = mimicHitboxLayer;
+                    // Use Default layer (not MimicHitbox) so this trigger collides
+                    // with the Player collider normally. Leg raycasts already exclude
+                    // MimicHitbox layer, and Default-vs-Default raycasts are fine
+                    // because this is a trigger (no physical blocking of leg rays).
+                    tipGO.layer = 0; // Default
 
                     SphereCollider sc = tipGO.AddComponent<SphereCollider>();
                     sc.isTrigger = true;
                     sc.radius = legTipRadius;
 
-                    // ── Kinematic Rigidbody — required for OnTriggerEnter to fire ──
+                    // Kinematic Rigidbody required for OnTriggerEnter to fire
                     Rigidbody rb = tipGO.AddComponent<Rigidbody>();
                     rb.isKinematic = true;
                     rb.useGravity = false;
@@ -356,19 +357,23 @@ namespace MimicSpace
         }
     }
 
-    // ── Receives orb hits ─────────────────────────────────────────────────────
+    // ── Receives orb hits via solid collision (matches how skeleton works) ───
     public class MimicHitboxReceiver : MonoBehaviour
     {
         [HideInInspector] public MimicEnemy owner;
 
-        void OnTriggerEnter(Collider other)
+        // OnCollisionEnter fires because the hitbox is a solid (non-trigger) collider,
+        // exactly like the skeleton's CapsuleCollider. The orb calls Impact() after this.
+        void OnCollisionEnter(Collision col)
         {
-            Debug.Log($"[MimicHitbox] OnTriggerEnter with: {other.gameObject.name} (layer {other.gameObject.layer})");
-            OrbProjectile orb = other.GetComponent<OrbProjectile>();
+            if (col.gameObject.CompareTag("Player")) return;
+
+            OrbProjectile orb = col.gameObject.GetComponent<OrbProjectile>();
             if (orb != null)
             {
-                Debug.Log("[MimicHitbox] Orb detected — calling TakeDamage.");
+                Debug.Log("[MimicHitbox] Orb hit — calling TakeDamage.");
                 owner?.TakeDamage(1);
+                // Don't call Impact() here — the orb's own OnCollisionEnter does it
             }
         }
     }

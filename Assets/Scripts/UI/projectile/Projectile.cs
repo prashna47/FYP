@@ -13,8 +13,7 @@ public class OrbProjectile : MonoBehaviour
     private Vector3 moveDirection;
     private Vector3 targetPoint;
     private bool hasTarget = false;
-    private bool hasDealtDamage = false;
-    private bool hasImpacted = false;   // guard against double Impact()
+    private bool hasImpacted = false;
 
     public void SetTarget(Vector3 target)
     {
@@ -51,39 +50,26 @@ public class OrbProjectile : MonoBehaviour
             Impact();
     }
 
-    // ── Solid colliders — existing enemies / walls ────────────────────────────
     void OnCollisionEnter(Collision col)
     {
         if (hasImpacted) return;
         if (col.gameObject.CompareTag("Player")) return;
 
-        // Never handle Mimic here — it uses the trigger path below
-        if (col.gameObject.GetComponentInParent<MimicSpace.MimicEnemy>() != null) return;
-
+        // Generic enemy
         Enemy enemy = col.gameObject.GetComponent<Enemy>();
         if (enemy != null) { enemy.TakeDamage(1); Impact(); return; }
 
+        // Skeleton enemy
         SkeletonEnemy skeleton = col.gameObject.GetComponent<SkeletonEnemy>();
         if (skeleton != null) { skeleton.TakeDamage(1); Impact(); return; }
 
+        // Mimic enemy — orb hits the MimicHitbox child collider.
+        // MimicHitboxReceiver.OnCollisionEnter handles the TakeDamage call on its side.
+        // We just need to Impact() here so the orb disappears.
+        MimicSpace.MimicHitboxReceiver mimicHit = col.gameObject.GetComponent<MimicSpace.MimicHitboxReceiver>();
+        if (mimicHit != null) { Impact(); return; }
+
         Impact();
-    }
-
-    // ── Trigger colliders — MimicHitbox ──────────────────────────────────────
-    void OnTriggerEnter(Collider other)
-    {
-        if (hasImpacted || hasDealtDamage) return;
-
-        Debug.Log($"[Orb] OnTriggerEnter with: {other.gameObject.name} layer={other.gameObject.layer}");
-
-        MimicSpace.MimicHitboxReceiver recv = other.GetComponent<MimicSpace.MimicHitboxReceiver>();
-        if (recv != null)
-        {
-            Debug.Log("[Orb] Hit MimicHitbox — dealing damage.");
-            hasDealtDamage = true;
-            recv.owner?.TakeDamage(1);
-            Impact();
-        }
     }
 
     void Impact()
