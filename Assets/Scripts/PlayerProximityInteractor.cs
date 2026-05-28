@@ -24,10 +24,14 @@ public class PlayerProximityInteractor : MonoBehaviour
     {
         self = transform;
         if (promptGroup) { promptGroup.alpha = 0f; promptGroup.blocksRaycasts = false; }
+
+
     }
 
     void Update()
     {
+
+
         if (BookUI.IsOpen) { SetPrompt(null); return; }
 
         for (int i = inRange.Count - 1; i >= 0; i--)

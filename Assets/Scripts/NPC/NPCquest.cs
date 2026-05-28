@@ -145,7 +145,7 @@ public class NPCQuestController : MonoBehaviour
         PlayerControlLock.MovementLocked = false;
         InteractionLock.DialoguePlaying = false;
 
-        // NPC stays alive after talk objective
+        InteractionLock.NpcInRange = false;
     }
 
     // 🔥 SAFE DESPAWN START

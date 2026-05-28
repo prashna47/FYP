@@ -215,7 +215,7 @@ public class BookUI : MonoBehaviour
 
     void ShowCursor(bool show)
     {
-        Cursor.visible = show;
-        Cursor.lockState = show ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
     }
 }

@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections;
+using Unity.VisualScripting;
 
-[RequireComponent(typeof(SphereCollider))]
 public class ProximityPotionInteractable : MonoBehaviour, IInteractable
 {
     [Header("Prompt")]
@@ -38,16 +38,20 @@ public class ProximityPotionInteractable : MonoBehaviour, IInteractable
 
     void Reset()
     {
-        var col = GetComponent<SphereCollider>();
+        var col = GetComponent<BoxCollider>();
         col.isTrigger = true;
-        col.radius = 2.0f;
+
+        var rb = gameObject.GetOrAddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
     }
 
-    void OnTriggerEnter(Collider other)
+    void OnTriggerStay(Collider other)
     {
         if (!other.CompareTag("Player")) return;
+
         var interactor = other.GetComponent<PlayerProximityInteractor>();
-        if (interactor != null)
+        if (interactor != null && playerInside == null)
         {
             playerInside = interactor;
             playerInside.Register(this);

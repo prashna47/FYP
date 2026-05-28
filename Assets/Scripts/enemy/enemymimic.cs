@@ -329,7 +329,6 @@ namespace MimicSpace
                            ?? other.GetComponentInParent<PlayerHealth>();
             if (ph == null)
             {
-                Debug.LogWarning("[Mimic] Player collider found but no PlayerHealth component on it or its parent.");
                 return;
             }
 
@@ -371,7 +370,6 @@ namespace MimicSpace
             OrbProjectile orb = col.gameObject.GetComponent<OrbProjectile>();
             if (orb != null)
             {
-                Debug.Log("[MimicHitbox] Orb hit — calling TakeDamage.");
                 owner?.TakeDamage(1);
                 // Don't call Impact() here — the orb's own OnCollisionEnter does it
             }
@@ -385,7 +383,6 @@ namespace MimicSpace
 
         void OnTriggerEnter(Collider other)
         {
-            Debug.Log($"[LegTip] OnTriggerEnter with: {other.gameObject.name} tag={other.tag}");
             owner?.TryDealDamageToPlayer(other);
         }
     }

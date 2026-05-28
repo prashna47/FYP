@@ -74,7 +74,6 @@ public class PlayerNameUI : MonoBehaviour
         yield return new WaitForSeconds(2f);
         yield return StartCoroutine(Fade(0f));
 
-        yield return StartCoroutine(Fade(0f));
 
         // Unfreeze player
         PlayerControlLock.MovementLocked = false;
