@@ -16,6 +16,26 @@ namespace MimicSpace
         public float moveSpeed = 2.5f;
         public float chaseSpeed = 4f;
 
+        [Header("Respawn Grace Period")]
+        [Tooltip("Seconds after respawn before the mimic can move and deal damage")]
+        public float respawnGraceDuration = 3f;
+        private float respawnGracePeriod = 3f; // customizable in inspector
+        private bool inGracePeriod = false;
+
+        [Header("Death Collapse")]
+        public float collapseSpeed = 3f; // how fast it sinks to ground
+
+        [Header("Objective / Quest")]
+        public int objectiveIndex;
+        public int stepIndex = 0;
+        public int respawnStepIndex = 1; // the step index to check on second death
+
+        [Header("Camera Pan on Respawn")]
+        public Transform cameraPanTarget;
+        public float holdTime = 2f;
+
+        private int deathCount = 0;
+
         [Header("Wander")]
         public float wanderRadius = 6f;
         public float wanderWaitTime = 2f;
@@ -46,6 +66,7 @@ namespace MimicSpace
         public Vector3 hitboxBoxSize = new Vector3(2f, 1.5f, 2f);
         public float hitboxCapsuleHeight = 2f;
         public Vector3 hitboxOffset = Vector3.zero;
+        private float originalHeight;
 
         // ── Leg attack ────────────────────────────────────────────────────────
         [Header("Leg Attack")]
@@ -78,23 +99,46 @@ namespace MimicSpace
         private Dictionary<Leg, GameObject> legTriggers = new Dictionary<Leg, GameObject>();
         private LayerMask legRaycastMask;
 
+
+        [Header("Respawn Trigger")]
+        [Tooltip("The objective index whose START triggers this mimic to respawn")]
+        public int respawnOnObjectiveIndex = -1;
+
+        // remove: public int respawnStepIndex
+        // remove: public float respawnDelay
+
+
         // =====================================================================
 
         void Start()
         {
             myMimic = GetComponent<Mimic>();
             currentHP = maxHP;
+            originalHeight = height;
             spawnPosition = transform.position;
             SetNewWanderTarget();
 
             GameObject p = GameObject.FindWithTag("Player");
             if (p != null) player = p.transform;
 
-            // Exclude MimicHitbox from all leg raycasts
             legRaycastMask = ~(1 << mimicHitboxLayer);
             myMimic.legRaycastMask = legRaycastMask;
 
             CreateHitbox();
+
+            // Subscribe to quest objective start
+            QuestManager.OnObjectiveStarted += OnObjectiveStarted;
+        }
+
+        void OnDestroy()
+        {
+            QuestManager.OnObjectiveStarted -= OnObjectiveStarted;
+        }
+
+        void OnObjectiveStarted(int index)
+        {
+            if (index == respawnOnObjectiveIndex && isDead)
+                StartCoroutine(Respawn());
         }
 
         void Update()
@@ -105,15 +149,25 @@ namespace MimicSpace
             if (alertTimer > 0f) alertTimer -= Time.deltaTime;
 
             SyncLegTriggers();
-            UpdateAI();
+
+            if (!inGracePeriod)  // ← add this check
+                UpdateAI();
+
             ApplyHeight();
         }
+        void RetractLegs()
+        {
+            // Disable all active leg triggers first
+            foreach (var kv in legTriggers)
+                if (kv.Value != null) kv.Value.SetActive(false);
+            legTriggers.Clear();
 
-        // =====================================================================
-        //  Hitbox — solid (non-trigger) collider so the orb's OnCollisionEnter hits it.
-        //  Same approach as the Skeleton's CapsuleCollider.
-        //  It lives on the MimicHitbox layer which leg raycasts exclude via legRaycastMask.
-        // =====================================================================
+            // Destroy all active Leg components so they visually disappear
+            Leg[] activeLegs = GetComponentsInChildren<Leg>();
+            foreach (Leg leg in activeLegs)
+                Destroy(leg.gameObject);
+        }
+
 
         void CreateHitbox()
         {
@@ -258,25 +312,92 @@ namespace MimicSpace
                 StartCoroutine(Die());
         }
 
+        // ...inside Die():
         IEnumerator Die()
         {
             isDead = true;
+            deathCount++;
             SetVelocity(Vector3.zero);
             healthBar?.PlayDeathAnimation();
+
+            // Retract legs immediately on death
+            RetractLegs();
+
+            // Then sink the body to the ground
+            yield return StartCoroutine(CollapseToGround());
+
+            // Stop Mimic from spawning new legs
+            myMimic.enabled = false;
+
+            if (deathCount == 1)
+            {
+                if (QuestManager.Instance != null)
+                    QuestManager.Instance.CompleteMimicObjective();
+            }
+            else
+            {
+                if (QuestManager.Instance != null)
+                    QuestManager.Instance.CompleteMimicObjective();
+
+                yield return new WaitForSeconds(destroyDelay);
+                Destroy(gameObject);
+            }
+        }
+
+        IEnumerator CollapseToGround()
+        {
+            float startHeight = height;
+
+            // Optionally spawn smoke at the start of collapse
+            if (smokePrefab != null)
+                Instantiate(smokePrefab, transform.position, Quaternion.identity);
+
+            while (height > 0.01f)
+            {
+                height = Mathf.Lerp(height, 0f, collapseSpeed * Time.deltaTime);
+                yield return null;
+            }
+
+            height = 0f;
+        }
+
+        IEnumerator Respawn()
+        {
+            isDead = false;
+            currentHP = maxHP;
+            damageTimer = 0f;
+            alertTimer = 0f;
+            wanderWaitTimer = 0f;
+            velocity = Vector3.zero;
+            myMimic.velocity = Vector3.zero;
+            height = originalHeight;
+
+            // Re-enable Mimic so it naturally starts growing legs again
+            myMimic.enabled = true;
+
+            state = AIState.Wander;
+            spawnPosition = transform.position;
+            SetNewWanderTarget();
+
+            healthBar?.ResetBar();
 
             if (smokePrefab != null)
                 Instantiate(smokePrefab, transform.position, Quaternion.identity);
 
-            foreach (var kv in legTriggers)
-                if (kv.Value != null) kv.Value.SetActive(false);
+            if (cameraPanTarget != null)
+            {
+                camera cam = Camera.main?.GetComponent<camera>();
+                if (cam != null)
+                    cam.PanToPosition(cameraPanTarget.position, holdTime);
+            }
 
-            yield return new WaitForSeconds(destroyDelay);
-            Destroy(gameObject);
+            // Grace period — mimic sits still and can't deal damage
+            inGracePeriod = true;
+            yield return new WaitForSeconds(respawnGraceDuration);
+            inGracePeriod = false;
         }
 
-        // =====================================================================
         //  Leg tip triggers — hurt player on contact
-        // =====================================================================
 
         void SyncLegTriggers()
         {
@@ -322,6 +443,7 @@ namespace MimicSpace
         public void TryDealDamageToPlayer(Collider other)
         {
             if (isDead) return;
+            if (inGracePeriod) return;
             if (damageTimer > 0f) return;
             if (!other.CompareTag("Player")) return;
 

@@ -37,6 +37,8 @@ public class PlayerHealth : MonoBehaviour
     void Die()
     {
         Debug.Log("Player died.");
+        if (RespawnManager.Instance != null)
+            RespawnManager.Instance.OnPlayerDied();
     }
     public void HealToFull()
     {

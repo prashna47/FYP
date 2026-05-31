@@ -113,6 +113,26 @@ public class MimicHealthBar : MonoBehaviour
         targetAlpha = 1f;
     }
 
+    public void ResetBar()
+    {
+        if (deathRoutine != null) StopCoroutine(deathRoutine);
+        deathRoutine = null;
+        isDying = false;
+
+        currentFill = 1f;
+        targetFill = 1f;
+        ghostFillAmt = 1f;
+        ghostTimer = 0f;
+        flashTimer = 0f;
+        targetAlpha = 0f;      // hidden until combat starts
+
+        if (fillImage != null) fillImage.fillAmount = 1f;
+        if (ghostFill != null) ghostFill.fillAmount = 1f;
+        if (canvasGroup != null) canvasGroup.alpha = 0f;
+
+        gameObject.SetActive(true);  // re-enable after DeathFade disabled it
+    }
+
     /// <summary>Fade out the bar (Mimic goes back to wander).</summary>
     public void Hide()
     {

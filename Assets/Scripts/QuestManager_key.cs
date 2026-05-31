@@ -12,11 +12,13 @@ public class QuestManager : MonoBehaviour
     [Header("Quest Settings")]
     public float hintDelay = 30f;
 
+
     public bool QuestStarted { get; private set; } = false;
 
     [Header("Arrow")]
     public CanvasGroup arrowGroup;
     public ScreenDirectionArrow arrow;
+    public static System.Action<int> OnObjectiveStarted;
 
     [Header("Multi Enemy Arrow")]
     public GameObject enemyArrowPrefab;
@@ -109,6 +111,8 @@ public class QuestManager : MonoBehaviour
 
         QuestUI.Instance.HideImmediate();
 
+
+
         yield return StartCoroutine(
     PlayDialogueSequence(obj.startSequence, DialoguePhase.Start)
 );
@@ -123,6 +127,13 @@ public class QuestManager : MonoBehaviour
         QuestUI.Instance.ShowObjective(obj.objectiveName);
         completingObjective = false;
 
+        if (CurrentObjective.type == ObjectiveType.InteractOrb)
+        {
+            foreach (var orb in CurrentObjective.targetOrbs)
+                if (orb != null) orb.Activate();
+        }
+        OnObjectiveStarted?.Invoke(currentObjectiveIndex);
+
         UpdateInteractablesForObjective(currentObjectiveIndex);
     }
 
@@ -130,8 +141,8 @@ public class QuestManager : MonoBehaviour
     {
         Objective obj = CurrentObjective;
 
-        // Disable single arrow for combat
-        if (obj.type == ObjectiveType.DefeatEnemy || obj.type == ObjectiveType.DefeatSkeleton)
+        // Disable single arrow for combat 
+        if (obj.type == ObjectiveType.DefeatEnemy || obj.type == ObjectiveType.DefeatSkeleton || obj.type == ObjectiveType.DefeatMimic)  
         {
             arrow.enabled = false;
             arrowGroup.gameObject.SetActive(false);
@@ -153,6 +164,41 @@ public class QuestManager : MonoBehaviour
             arrow.target = obj.arrowTargets[currentStepIndex];
         else
             arrow.target = obj.arrowTarget;
+    }
+    void SpawnMimicArrows(MimicSpace.MimicEnemy[] mimics)
+    {
+        ClearEnemyArrows();
+        if (enemyArrowPrefab == null || arrowCanvas == null) return;
+
+        foreach (var m in mimics)
+        {
+            if (m == null) continue;
+            GameObject go = Instantiate(enemyArrowPrefab, arrowCanvas.transform);
+            MultiEnemyArrow mea = go.GetComponent<MultiEnemyArrow>();
+            if (mea != null)
+            {
+                mea.SetTarget(m.transform);
+                activeEnemyArrows.Add(mea);
+            }
+        }
+    }
+
+    bool AllMimicsDead(MimicSpace.MimicEnemy[] mimics)
+    {
+        if (mimics == null || mimics.Length == 0) return false;
+        foreach (var m in mimics)
+            if (m != null) return false;
+        return true;
+    }
+
+    public void CompleteMimicObjective()
+    {
+        if (questFinished || completingObjective) return;
+        Objective obj = CurrentObjective;
+        if (obj.type != ObjectiveType.DefeatMimic) return;
+
+        completingObjective = true;
+        CompleteObjective(obj.pointsReward);
     }
     void SpawnSkeletonArrows(SkeletonEnemy[] skeletons)
     {
@@ -225,10 +271,16 @@ public class QuestManager : MonoBehaviour
                 completed = AllSkeletonsDead(obj.targetSkeletons);
                 break;
 
-            // ✅ NEW
             case ObjectiveType.DrinkPotion:
                 if (obj.potion != null) completed = !obj.potion.gameObject.activeSelf;
                 break;
+
+            case ObjectiveType.DefeatMimic:
+                completed = AllMimicsDead(obj.targetMimics);
+                break;
+
+            case ObjectiveType.InteractOrb:
+                return;
 
             case ObjectiveType.ReachLocation:
             case ObjectiveType.Sleep:
@@ -240,6 +292,18 @@ public class QuestManager : MonoBehaviour
             completingObjective = true;
             CompleteObjective(obj.pointsReward);
         }
+    }
+    public void OrbInteracted()
+    {
+        if (questFinished || completingObjective) return;
+        if (CurrentObjective.type != ObjectiveType.InteractOrb) return;
+
+        // Deactivate all other orbs in this objective so only one is needed
+        foreach (var orb in CurrentObjective.targetOrbs)
+            if (orb != null) orb.Deactivate();
+
+        completingObjective = true;
+        CompleteObjective(CurrentObjective.pointsReward);
     }
 
     bool AllEnemiesDead(Enemy[] enemies)
@@ -323,7 +387,15 @@ public class QuestManager : MonoBehaviour
     PlayDialogueSequence(justCompleted.completionSequence, DialoguePhase.Completion)
 );
 
-        if (justCompleted.cutscene != null)
+        // Gendered cutscene takes priority if assigned
+        if (justCompleted.genderedCutscene != null)
+        {
+            bool done = false;
+            justCompleted.genderedCutscene.onCutsceneFinished = () => done = true;
+            justCompleted.genderedCutscene.Play();
+            while (!done) yield return null;
+        }
+        else if (justCompleted.cutscene != null)
         {
             bool done = false;
             justCompleted.cutscene.onCutsceneFinished = () => done = true;
@@ -335,10 +407,11 @@ public class QuestManager : MonoBehaviour
         if (npc != null)
             npc.OnObjectiveCompleted(currentObjectiveIndex);
 
-        // ✅ ADD THIS LINE — notifies AppearOnObjectiveNPC (and any future listener)
         AppearOnObjectiveNPC.OnQuestObjectiveCompleted?.Invoke(currentObjectiveIndex);
 
-        // ✅ NEW — show name screen after completion dialogues if flagged
+        if (RespawnManager.Instance != null)
+            RespawnManager.Instance.CheckSpawnUnlock(currentObjectiveIndex);
+
         if (justCompleted.showNameScreenAfterComplete && PlayerNameUI.Instance != null)
             yield return PlayerNameUI.Instance.ShowAndWait();
 
@@ -349,7 +422,6 @@ public class QuestManager : MonoBehaviour
             yield return new WaitUntil(() => !GameState.IsPlayerFrozen);
         }
 
-        // ✅ NEW — show choice screen if flagged
         if (justCompleted.showChoiceScreen && PlayerChoiceUI.Instance != null)
         {
             yield return PlayerChoiceUI.Instance.ShowAndWait(
@@ -511,7 +583,9 @@ public class Objective
     [Tooltip("Drag all skeletons here for DefeatSkeleton objectives")]
     public SkeletonEnemy[] targetSkeletons;
 
-    // ✅ NEW
+    [Tooltip("Drag all Mimics here for DefeatMimic objectives")]
+    public MimicSpace.MimicEnemy[] targetMimics;
+
     [Tooltip("Drag your potion GameObject here for DrinkPotion objectives")]
     public ProximityPotionInteractable potion;
 
@@ -522,6 +596,7 @@ public class Objective
 
     [Header("Cutscene (Optional)")]
     public CutsceneScript cutscene;
+    public GenderedCutscenePlayer genderedCutscene; 
 
     [Header("Teleport After Completion (Optional)")]
     public QuestTeleport questTeleport;
@@ -538,6 +613,10 @@ public class Objective
     public string choiceLabelA = "Head Out";
     public string choiceLabelB = "Stay and Explore";
     public QuestTeleport choiceTeleport; // used if player picks Head Out
+
+    [Header("Orb Objective (InteractOrb type)")]
+    [Tooltip("Drag all orbs for this objective here — player only needs to interact with one")]
+    public QuestOrb[] targetOrbs;
 
 
 }
@@ -558,7 +637,9 @@ public enum ObjectiveType
     Sleep,
     DefeatEnemy,
     DrinkPotion,
-    DefeatSkeleton
+    DefeatSkeleton,
+    DefeatMimic,
+    InteractOrb
 }
 
 public enum SpeakerType
